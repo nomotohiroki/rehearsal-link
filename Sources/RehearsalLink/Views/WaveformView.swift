@@ -38,7 +38,7 @@ struct WaveformView: View {
                 // セグメント背景
                 ForEach(segments) { segment in
                     ZStack {
-                        segmentColor(for: segment.type)
+                        segmentColor(for: segment)
                         if selectedSegmentId == segment.id {
                             Rectangle()
                                 .stroke(Color.accentColor, lineWidth: 2)
@@ -118,11 +118,14 @@ struct WaveformView: View {
         }
     }
     
-    private func segmentColor(for type: SegmentType) -> Color {
-        switch type {
+    private func segmentColor(for segment: AudioSegment) -> Color {
+        switch segment.type {
         case .performance:
             return Color.blue.opacity(0.2)
         case .conversation:
+            if segment.transcription != nil {
+                return Color.purple.opacity(0.3)
+            }
             return Color.green.opacity(0.2)
         case .silence:
             return Color.gray.opacity(0.1)

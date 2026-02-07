@@ -99,6 +99,18 @@ struct MainView: View {
                             .frame(height: 340) // Adjust height to accommodate padding and scrollbar
                         }
                         .background(Color.black.opacity(0.1))
+                        .overlay(alignment: .bottom) {
+                            if viewModel.isBatchTranscribing {
+                                VStack {
+                                    ProgressView("Transcribing all conversations...", value: viewModel.batchTranscriptionProgress, total: 1.0)
+                                        .padding()
+                                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
+                                        .cornerRadius(8)
+                                        .shadow(radius: 4)
+                                }
+                                .padding()
+                            }
+                        }
                         
                         Divider()
                         
@@ -329,11 +341,24 @@ struct MainView: View {
                     .disabled(viewModel.isLoading || viewModel.audioData == nil)
                     
                     Menu {
-                        Button("Export Performance Only") {
-                            viewModel.exportSegments(type: .performance)
+                        Section("Audio Export") {
+                            Button("Export Performance Only") {
+                                viewModel.exportSegments(type: .performance)
+                            }
+                            Button("Export Conversation Only") {
+                                viewModel.exportSegments(type: .conversation)
+                            }
                         }
-                        Button("Export Conversation Only") {
-                            viewModel.exportSegments(type: .conversation)
+                        
+                        Section("Transcription") {
+                            Button("Transcribe All Conversations") {
+                                viewModel.transcribeAllConversations()
+                            }
+                            .disabled(viewModel.isBatchTranscribing)
+                            
+                            Button("Export Transcriptions (.txt)") {
+                                viewModel.exportAllTranscriptions()
+                            }
                         }
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")

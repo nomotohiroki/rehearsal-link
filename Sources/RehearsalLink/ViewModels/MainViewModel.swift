@@ -17,6 +17,8 @@ class MainViewModel: ObservableObject {
     @Published var currentTime: TimeInterval = 0
     @Published var isLoopingEnabled = false
     @Published var isTranscribing = false
+    @Published var isBatchTranscribing = false
+    @Published var batchTranscriptionProgress: Double = 0
     
     @Published var zoomLevel: Double = 1.0 // 1.0 = fit to width
     
@@ -248,6 +250,101 @@ class MainViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    func transcribeAllConversations() {
+        guard let audioData = audioData else { return }
+        
+        let conversationSegments = segments.filter { $0.type == .conversation && $0.transcription == nil }
+        guard !conversationSegments.isEmpty else { return }
+        
+        isBatchTranscribing = true
+        batchTranscriptionProgress = 0
+        errorMessage = nil
+        
+        Task {
+            var completedCount = 0
+            let totalCount = conversationSegments.count
+            
+            for segment in conversationSegments {
+                // 連続実行による負荷を軽減するため、各処理の間にわずかな空きを作る
+                await Task.yield()
+                
+                do {
+                    let text = try await transcriptionService.transcribe(
+                        audioURL: audioData.url,
+                        startTime: segment.startTime,
+                        endTime: segment.endTime
+                    )
+                    
+                    await MainActor.run {
+                        if let index = self.segments.firstIndex(where: { $0.id == segment.id }) {
+                            let oldSegment = self.segments[index]
+                            self.segments[index] = AudioSegment(
+                                id: oldSegment.id,
+                                startTime: oldSegment.startTime,
+                                endTime: oldSegment.endTime,
+                                type: oldSegment.type,
+                                label: oldSegment.label,
+                                transcription: text
+                            )
+                        }
+                        completedCount += 1
+                        self.batchTranscriptionProgress = Double(completedCount) / Double(totalCount)
+                    }
+                } catch {
+                    print("Batch transcription error for segment \(segment.id): \(error)")
+                    // 個別のエラーはログに記録し、続行する
+                }
+            }
+            
+            await MainActor.run {
+                self.isBatchTranscribing = false
+                self.batchTranscriptionProgress = 1.0
+            }
+        }
+    }
+    
+    func exportAllTranscriptions() {
+        guard let audioData = audioData else { return }
+        
+        let transcribedSegments = segments.filter { $0.transcription != nil }
+        guard !transcribedSegments.isEmpty else {
+            self.errorMessage = "文字起こし済みのセグメントがありません。"
+            return
+        }
+        
+        // テキストの組み立て
+        var fullText = "Project: \(audioData.fileName)\n"
+        fullText += "Generated: \(Date().formatted())\n\n"
+        
+        for segment in transcribedSegments {
+            let timestamp = formatTime(segment.startTime)
+            let label = segment.label ?? "Segment"
+            fullText += "[\(timestamp)] \(label):\n"
+            fullText += "\(segment.transcription ?? "")\n\n"
+        }
+        
+        Task {
+            let savePanel = NSSavePanel()
+            savePanel.allowedContentTypes = [.plainText]
+            savePanel.nameFieldStringValue = audioData.fileName.replacingOccurrences(of: "." + audioData.url.pathExtension, with: "") + "_transcription.txt"
+            
+            let response = await savePanel.begin()
+            guard response == .OK, let outputURL = savePanel.url else { return }
+            
+            do {
+                try fullText.write(to: outputURL, atomically: true, encoding: .utf8)
+            } catch {
+                self.errorMessage = "ファイルの保存に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
     
     func saveProject() {
