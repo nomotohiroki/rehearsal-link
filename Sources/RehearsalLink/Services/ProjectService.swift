@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import UniformTypeIdentifiers
 
+@MainActor
 class ProjectService {
     enum ProjectError: Error {
         case fileSelectionCancelled
@@ -10,7 +11,13 @@ class ProjectService {
         case invalidData
     }
     
-    private let projectUTI = UTType("com.example.rehearsallink") ?? .json
+    private let projectUTI: UTType = {
+        if let type = UTType("com.example.rehearsallink") {
+            return type
+        }
+        // システムに登録されていない場合、実行時に定義を生成
+        return UTType(exportedAs: "com.example.rehearsallink", conformingTo: .json)
+    }()
     
     @MainActor
     func saveProject(audioFileURL: URL, segments: [AudioSegment]) async throws {
@@ -48,6 +55,10 @@ class ProjectService {
             throw ProjectError.fileSelectionCancelled
         }
         
+        return try await loadProject(from: url)
+    }
+
+    func loadProject(from url: URL) async throws -> RehearsalLinkProject {
         do {
             let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()

@@ -22,6 +22,10 @@ class MainViewModel: ObservableObject {
     
     @Published var zoomLevel: Double = 1.0 // 1.0 = fit to width
     
+    @Published var showProjectDetectedAlert = false
+    private var pendingAudioURL: URL?
+    private var pendingProjectURL: URL?
+    
     private let audioLoadService = AudioLoadService()
     private let waveformAnalyzer = WaveformAnalyzer()
     private let audioPlayerService = AudioPlayerService()
@@ -76,43 +80,120 @@ class MainViewModel: ObservableObject {
     
     func selectFile() {
         Task {
-            isLoading = true
-            errorMessage = nil
             do {
-                print("MainViewModel: Starting load...")
-                let data = try await audioLoadService.selectAndLoadFile()
-                self.audioData = data
-                self.isLoading = false
-                self.isAnalyzing = true
-                print("MainViewModel: AudioData set. Duration: \(data.duration)")
+                let audioURL = try await audioLoadService.selectAudioFile()
                 
-                // プレイヤーにロード（先に再生可能な状態にする）
-                audioPlayerService.load(url: data.url)
-
-                // 重い解析処理をバックグラウンドで行う
-                // Task.detachedを使用してMainActorから切り離す
-                let analyzer = self.waveformAnalyzer
-                let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
-                    let samples = analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-                    let features = analyzer.extractFeatures(from: data.pcmBuffer)
-                    let segments = analyzer.calculateSegments(from: features)
-                    return (samples, features, segments)
-                }.value
-
-                self.waveformSamples = samples
-                self.audioFeatures = features
-                self.segments = segments
-                self.isAnalyzing = false
+                // プロジェクトファイルの候補を複数チェック
+                let baseURL = audioURL.deletingPathExtension()
+                let projectURL = baseURL.appendingPathExtension("rehearsallink")
+                let projectJSONURL = baseURL.appendingPathExtension("rehearsallink").appendingPathExtension("json")
                 
-                print("MainViewModel: Analysis complete.")
+                if FileManager.default.fileExists(atPath: projectURL.path) {
+                    self.pendingAudioURL = audioURL
+                    self.pendingProjectURL = projectURL
+                    self.showProjectDetectedAlert = true
+                } else if FileManager.default.fileExists(atPath: projectJSONURL.path) {
+                    self.pendingAudioURL = audioURL
+                    self.pendingProjectURL = projectJSONURL
+                    self.showProjectDetectedAlert = true
+                } else {
+                    try await performLoadAudio(from: audioURL)
+                }
             } catch AudioLoadService.AudioLoadError.fileSelectionCancelled {
-                isLoading = false
-                isAnalyzing = false
+                // Ignore
             } catch {
                 self.errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
                 isLoading = false
                 isAnalyzing = false
             }
+        }
+    }
+    
+    private func performLoadAudio(from url: URL) async throws {
+        isLoading = true
+        errorMessage = nil
+        
+        print("MainViewModel: Starting load...")
+        let data = try await audioLoadService.loadAudio(from: url)
+        self.audioData = data
+        self.isLoading = false
+        self.isAnalyzing = true
+        print("MainViewModel: AudioData set. Duration: \(data.duration)")
+        
+        // プレイヤーにロード
+        audioPlayerService.load(url: data.url)
+
+        // 重い解析処理をバックグラウンドで行う
+        let analyzer = self.waveformAnalyzer
+        let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
+            let samples = analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+            let features = analyzer.extractFeatures(from: data.pcmBuffer)
+            let segments = analyzer.calculateSegments(from: features)
+            return (samples, features, segments)
+        }.value
+
+        self.waveformSamples = samples
+        self.audioFeatures = features
+        self.segments = segments
+        self.isAnalyzing = false
+        
+        print("MainViewModel: Analysis complete.")
+    }
+
+    private func performLoadProject(_ project: RehearsalLinkProject) async throws {
+        isLoading = true
+        errorMessage = nil
+        
+        // オーディオファイルの読み込み
+        let data = try await audioLoadService.loadAudio(from: project.audioFileURL)
+        self.audioData = data
+        self.isLoading = false
+        self.isAnalyzing = true
+        
+        // セグメント情報はプロジェクトから取得（解析を待たずに表示可能）
+        self.segments = project.segments
+        
+        // プレイヤーにロード
+        audioPlayerService.load(url: data.url)
+
+        // 波形のみバックグラウンドで解析
+        let analyzer = self.waveformAnalyzer
+        let samples = await Task.detached(priority: .userInitiated) {
+            return analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+        }.value
+        
+        self.waveformSamples = samples
+        self.isAnalyzing = false
+    }
+
+    func loadDetectedProject() {
+        guard let projectURL = pendingProjectURL else { return }
+        Task {
+            do {
+                let project = try await projectService.loadProject(from: projectURL)
+                try await performLoadProject(project)
+            } catch {
+                self.errorMessage = "プロジェクトの読み込みに失敗しました: \(error.localizedDescription)"
+                isLoading = false
+                isAnalyzing = false
+            }
+            pendingAudioURL = nil
+            pendingProjectURL = nil
+        }
+    }
+    
+    func loadAudioOnly() {
+        guard let audioURL = pendingAudioURL else { return }
+        Task {
+            do {
+                try await performLoadAudio(from: audioURL)
+            } catch {
+                self.errorMessage = "オーディオの読み込みに失敗しました: \(error.localizedDescription)"
+                isLoading = false
+                isAnalyzing = false
+            }
+            pendingAudioURL = nil
+            pendingProjectURL = nil
         }
     }
     
@@ -362,34 +443,11 @@ class MainViewModel: ObservableObject {
     
     func loadProject() {
         Task {
-            isLoading = true
-            errorMessage = nil
             do {
                 let project = try await projectService.loadProject()
-                
-                // オーディオファイルの読み込み
-                let data = try await audioLoadService.loadAudio(from: project.audioFileURL)
-                self.audioData = data
-                self.isLoading = false
-                self.isAnalyzing = true
-                
-                // セグメント情報はプロジェクトから取得（解析を待たずに表示可能）
-                self.segments = project.segments
-                
-                // プレイヤーにロード
-                audioPlayerService.load(url: data.url)
-
-                // 波形のみバックグラウンドで解析
-                let analyzer = self.waveformAnalyzer
-                let samples = await Task.detached(priority: .userInitiated) {
-                    return analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-                }.value
-                
-                self.waveformSamples = samples
-                self.isAnalyzing = false
+                try await performLoadProject(project)
             } catch ProjectService.ProjectError.fileSelectionCancelled {
-                isLoading = false
-                isAnalyzing = false
+                // Ignore
             } catch {
                 self.errorMessage = "プロジェクトの読み込みに失敗しました: \(error.localizedDescription)"
                 isLoading = false

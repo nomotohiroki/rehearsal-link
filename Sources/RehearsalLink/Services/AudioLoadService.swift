@@ -11,7 +11,7 @@ struct AudioLoadService: Sendable {
     }
     
     @MainActor
-    func selectAndLoadFile() async throws -> AudioData {
+    func selectAudioFile() async throws -> URL {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.audio, .mp3, .wav]
         openPanel.allowsMultipleSelection = false
@@ -22,7 +22,12 @@ struct AudioLoadService: Sendable {
         guard response == .OK, let url = openPanel.url else {
             throw AudioLoadError.fileSelectionCancelled
         }
-        
+        return url
+    }
+
+    @MainActor
+    func selectAndLoadFile() async throws -> AudioData {
+        let url = try await selectAudioFile()
         return try await loadAudio(from: url)
     }
     

@@ -323,6 +323,17 @@ struct MainView: View {
                 }
             }
             .navigationTitle("RehearsalLink")
+            .alert("Project Found", isPresented: $viewModel.showProjectDetectedAlert) {
+                Button("Load Project") {
+                    viewModel.loadDetectedProject()
+                }
+                Button("Load Audio Only") {
+                    viewModel.loadAudioOnly()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("A project file was found for this audio. Would you like to load the existing project or start fresh?")
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button(action: { viewModel.selectFile() }) {
