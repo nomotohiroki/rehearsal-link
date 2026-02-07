@@ -1,0 +1,39 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: Package macOS App
+        run: |
+          chmod +x scripts/package_macos.sh
+          ./scripts/package_macos.sh
+
+      - name: Create ZIP Archive
+        run: |
+          zip -r RehearsalLink.zip RehearsalLink.app
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: RehearsalLink.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

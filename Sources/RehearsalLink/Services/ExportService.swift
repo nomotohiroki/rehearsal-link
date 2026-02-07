@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 actor ExportService {
     enum ExportError: Error {
@@ -97,68 +97,45 @@ actor ExportService {
         readerOutput.audioMix = audioMix
         reader.add(readerOutput)
         
-                writer.startWriting()
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+        reader.startReading()
         
-                writer.startSession(atSourceTime: .zero)
+        let queue = DispatchQueue(label: "com.rehearsallink.export.queue")
         
-                reader.startReading()
-        
-                
-        
-                let queue = DispatchQueue(label: "com.rehearsallink.export.queue")
-        
-                
-        
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        
-                    writerInput.requestMediaDataWhenReady(on: queue) {
-        
-                        while writerInput.isReadyForMoreMediaData {
-        
-                            if reader.status == .reading, let buffer = readerOutput.copyNextSampleBuffer() {
-        
-                                writerInput.append(buffer)
-        
-                            } else {
-        
-                                writerInput.markAsFinished()
-        
-                                
-        
-                                if reader.status == .failed {
-        
-                                    continuation.resume(throwing: reader.error ?? ExportError.exportFailed(nil))
-        
-                                } else {
-        
-                                    writer.finishWriting {
-        
-                                        if writer.status == .completed {
-        
-                                            continuation.resume()
-        
-                                        } else {
-        
-                                            continuation.resume(throwing: writer.error ?? ExportError.exportFailed(nil))
-        
-                                        }
-        
-                                    }
-        
-                                }
-        
-                                break
-        
-                            }
-        
-                        }
-        
-                    }
-        
-                }
-        
-            }
-        
+        // Swift 6 strict concurrency requires @Sendable closures for these types.
+        // Since we are using these objects within a controlled sequence, we use a wrapper.
+        struct ExportContext: @unchecked Sendable {
+            let writer: AVAssetWriter
+            let writerInput: AVAssetWriterInput
+            let reader: AVAssetReader
+            let readerOutput: AVAssetReaderAudioMixOutput
         }
+        let context = ExportContext(writer: writer, writerInput: writerInput, reader: reader, readerOutput: readerOutput)
         
-        
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            context.writerInput.requestMediaDataWhenReady(on: queue) {
+                while context.writerInput.isReadyForMoreMediaData {
+                    if context.reader.status == .reading, let buffer = context.readerOutput.copyNextSampleBuffer() {
+                        context.writerInput.append(buffer)
+                    } else {
+                        context.writerInput.markAsFinished()
+                        
+                        if context.reader.status == .failed {
+                            continuation.resume(throwing: context.reader.error ?? ExportError.exportFailed(nil))
+                        } else {
+                            context.writer.finishWriting {
+                                if context.writer.status == .completed {
+                                    continuation.resume()
+                                } else {
+                                    continuation.resume(throwing: context.writer.error ?? ExportError.exportFailed(nil))
+                                }
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    }
+}

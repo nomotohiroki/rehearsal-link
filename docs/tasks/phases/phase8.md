@@ -42,5 +42,5 @@
   - リハーサル録音の聞き返し効率化、文字起こしによる内容把握など、進化した現状の機能を強力にアピール。
 
 ## 6. CI/CD 環境の整備
-- [ ] **Release Build 用の GitHub Workflow 作成**
+- [x] **Release Build 用の GitHub Workflow 作成**
   - タグ打ちなどのトリガーで、macOS アプリのビルド、バイナリのアーカイブ（ZIP作成）、GitHub Release への自動アップロードを行うワークフローの実装。

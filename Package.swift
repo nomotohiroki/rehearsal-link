@@ -12,5 +12,10 @@ let package = Package(
             dependencies: [],
             path: "Sources/RehearsalLink"
         ),
+        .testTarget(
+            name: "RehearsalLinkTests",
+            dependencies: ["RehearsalLink"],
+            path: "Tests/RehearsalLinkTests"
+        ),
     ]
 )
