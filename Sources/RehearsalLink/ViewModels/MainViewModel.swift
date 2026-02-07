@@ -161,6 +161,20 @@ class MainViewModel: ObservableObject {
         }
     }
     
+    func updateTranscription(id: UUID, text: String) {
+        if let index = segments.firstIndex(where: { $0.id == id }) {
+            let oldSegment = segments[index]
+            segments[index] = AudioSegment(
+                id: oldSegment.id,
+                startTime: oldSegment.startTime,
+                endTime: oldSegment.endTime,
+                type: oldSegment.type,
+                label: oldSegment.label,
+                transcription: text
+            )
+        }
+    }
+    
     func moveBoundary(index: Int, newTime: TimeInterval) {
         guard index >= 0 && index < segments.count - 1 else { return }
         

@@ -5,7 +5,7 @@ struct MainView: View {
     
     var body: some View {
         NavigationStack {
-            HStack(spacing: 0) {
+            HSplitView {
                 // Main Workspace
                 VStack(spacing: 0) {
                     if let audioData = viewModel.audioData {
@@ -182,12 +182,10 @@ struct MainView: View {
                             .padding()
                     }
                 }
-                .frame(minWidth: 600)
+                .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Inspector Panel
                 if viewModel.audioData != nil {
-                    Divider()
-                    
                     VStack(alignment: .leading, spacing: 20) {
                         Text("Inspector")
                             .font(.headline)
@@ -279,15 +277,16 @@ struct MainView: View {
                                             }
                                         }
                                         
-                                        if let transcription = segment.transcription {
-                                            ScrollView {
-                                                Text(transcription)
-                                                    .font(.body)
-                                                    .padding(8)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .background(Color.black.opacity(0.05))
-                                                    .cornerRadius(4)
-                                            }
+                                        if segment.transcription != nil {
+                                            TextEditor(text: Binding(
+                                                get: { segment.transcription ?? "" },
+                                                set: { newText in viewModel.updateTranscription(id: segment.id, text: newText) }
+                                            ))
+                                            .font(.body)
+                                            .padding(4)
+                                            .frame(maxWidth: .infinity)
+                                            .background(Color.black.opacity(0.05))
+                                            .cornerRadius(4)
                                         } else if !viewModel.isTranscribing {
                                             Text("No transcription yet")
                                                 .font(.caption)
@@ -307,7 +306,7 @@ struct MainView: View {
                         }
                     }
                     .padding()
-                    .frame(width: 300)
+                    .frame(minWidth: 250, idealWidth: 300, maxHeight: .infinity)
                     .background(Color(nsColor: .controlBackgroundColor))
                 }
             }
