@@ -12,4 +12,4 @@
 - [x] プロジェクトファイルの自動検出と読み込み確認
 - [x] セグメント結合機能 (Merge)
 - [x] README.md の刷新 (ユーザー価値の強調)
-- [ ] Release Build 用の GitHub Workflow 作成
+- [x] Release Build 用の GitHub Workflow 作成

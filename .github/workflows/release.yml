@@ -1,0 +1,42 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Release
+        run: swift build -c release
+
+      - name: Package Application
+        run: |
+          # コピー先のディレクトリが存在するか確認し、バイナリを配置
+          # RehearsalLink.app はリポジトリに含まれている前提
+          cp -f .build/release/RehearsalLink RehearsalLink.app/Contents/MacOS/RehearsalLink
+          
+          # 実行権限を付与
+          chmod +x RehearsalLink.app/Contents/MacOS/RehearsalLink
+          
+          # アプリケーションをZIP化
+          # --keepParent で展開時に RehearsalLink.app フォルダを含める
+          ditto -c -k --keepParent RehearsalLink.app RehearsalLink.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: RehearsalLink.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
