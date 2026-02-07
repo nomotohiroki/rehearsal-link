@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,27 +17,89 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set Version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="v0.0.0-dev"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          # vを除去したバージョン番号 (Info.plist用)
+          VERSION_NUMBER=$(echo $VERSION | sed 's/^v//')
+          echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_OUTPUT
+
       - name: Build Release
-        run: swift build -c release
+        run: swift build -c release --arch arm64
 
       - name: Package Application
         run: |
-          # コピー先のディレクトリが存在するか確認し、バイナリを配置
-          # RehearsalLink.app はリポジトリに含まれている前提
-          cp -f .build/release/RehearsalLink RehearsalLink.app/Contents/MacOS/RehearsalLink
+          APP_NAME="RehearsalLink"
+          APP_BUNDLE="$APP_NAME.app"
+          BINARY_PATH=".build/release/$APP_NAME"
+          VERSION_NUMBER="${{ steps.version.outputs.VERSION_NUMBER }}"
+
+          echo "Packaging $APP_NAME version $VERSION_NUMBER..."
+
+          # バイナリをコピー
+          cp -f "$BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+          chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+
+          # Info.plist のバージョン更新
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
+
+          # 署名手順書の作成
+          cat > SIGNING_INSTRUCTIONS.md << EOF
+          # Installation Instructions
+
+          Because this application is not signed with an Apple Developer Certificate, you may see a message saying the app is "damaged" or "cannot be opened" when you try to run it. This is a security feature of macOS called Gatekeeper.
+
+          ## How to run the app:
+
+          ### Option 1 (Recommended): Right-Click to Open
+          1. Move **RehearsalLink.app** to your Applications folder.
+          2. **Right-click** (or Control-click) on the app icon.
+          3. Select **Open** from the menu.
+          4. Click **Open** in the dialog box that appears.
+
+          ### Option 2: Remove Quarantine Attribute
+          If the above doesn't work, run the following command in Terminal:
+
+          \`\`\`bash
+          xattr -cr /Applications/RehearsalLink.app
+          \`\`\`
+
+          Then try opening the app again.
+          EOF
+
+          # Ad-hoc 署名 (必須)
+          # --deep: バンドル内の全階層を署名
+          # --force: 既存の署名があれば上書き
+          # -s -: Ad-hoc署名 (IDなし)
+          codesign --force --deep --options runtime --sign - "$APP_BUNDLE"
+
+          # 署名の検証
+          codesign -dv --verbose=4 "$APP_BUNDLE"
+
+          # ZIPアーカイブ作成
+          # SIGNING_INSTRUCTIONS.md も含めるために一時ディレクトリを作成
+          mkdir -p dist
+          cp -r "$APP_BUNDLE" dist/
+          cp SIGNING_INSTRUCTIONS.md dist/
           
-          # 実行権限を付与
-          chmod +x RehearsalLink.app/Contents/MacOS/RehearsalLink
-          
-          # アプリケーションをZIP化
-          # --keepParent で展開時に RehearsalLink.app フォルダを含める
-          ditto -c -k --keepParent RehearsalLink.app RehearsalLink.zip
+          cd dist
+          zip -r "../$APP_NAME.zip" "$APP_NAME.app" SIGNING_INSTRUCTIONS.md
+          cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: RehearsalLink.zip
           draft: false
           prerelease: false
+          body_path: SIGNING_INSTRUCTIONS.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
