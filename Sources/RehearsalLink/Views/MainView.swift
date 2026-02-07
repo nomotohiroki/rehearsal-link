@@ -196,7 +196,7 @@ struct MainView: View {
                         if let selectedId = viewModel.selectedSegmentId,
                            let segment = viewModel.segments.first(where: { $0.id == selectedId }) {
                             
-                            Group {
+                            VStack(alignment: .leading, spacing: 20) {
                                 VStack(alignment: .leading) {
                                     Text("Label")
                                         .font(.caption)
@@ -223,31 +223,37 @@ struct MainView: View {
                                     .labelsHidden()
                                 }
                                 
-                                VStack(alignment: .leading) {
-                                    Text("Start Time")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text(formatTime(segment.startTime))
-                                        .font(.body)
-                                        .monospacedDigit()
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading) {
+                                        Text("Start Time")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(formatTime(segment.startTime))
+                                            .font(.body)
+                                            .monospacedDigit()
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("End Time")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(formatTime(segment.endTime))
+                                            .font(.body)
+                                            .monospacedDigit()
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("Duration")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(String(format: "%.2f s", segment.duration))
+                                            .font(.body)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                
-                                VStack(alignment: .leading) {
-                                    Text("End Time")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text(formatTime(segment.endTime))
-                                        .font(.body)
-                                        .monospacedDigit()
-                                }
-                                
-                                VStack(alignment: .leading) {
-                                    Text("Duration")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text(String(format: "%.2f s", segment.duration))
-                                        .font(.body)
-                                }
+                                .padding(.top, 4)
                                 
                                 if segment.type == .conversation {
                                     Divider()
@@ -282,7 +288,6 @@ struct MainView: View {
                                                     .background(Color.black.opacity(0.05))
                                                     .cornerRadius(4)
                                             }
-                                            .frame(maxHeight: 150)
                                         } else if !viewModel.isTranscribing {
                                             Text("No transcription yet")
                                                 .font(.caption)
@@ -292,17 +297,17 @@ struct MainView: View {
                                     }
                                 }
                             }
+                            .frame(maxHeight: .infinity, alignment: .top)
                             
                         } else {
                             Text("No segment selected")
                                 .foregroundColor(.secondary)
                                 .italic()
+                                .frame(maxHeight: .infinity, alignment: .center)
                         }
-                        
-                        Spacer()
                     }
                     .padding()
-                    .frame(width: 250)
+                    .frame(width: 300)
                     .background(Color(nsColor: .controlBackgroundColor))
                 }
             }
