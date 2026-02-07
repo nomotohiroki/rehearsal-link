@@ -45,3 +45,16 @@
   - 書き出し中の進捗表示（Loading状態の管理）。
 - [x] **メニュー/UIへの追加**
   - ファイルメニューまたはツールバーに「Export Music Only」「Export Speech Only」を追加。
+
+## 5. 会話セグメントの文字起こし (Transcription)
+選択した会話セグメントの内容をテキスト化します。
+
+- [x] **SpeechTranscriptionServiceの作成**
+  - macOS 15+ (26+) の `SpeechAnalyzer` を使用した文字起こしロジック。
+  - セグメントの範囲指定に対応。
+- [x] **ViewModelへの統合**
+  - `transcribeSegment(id:)` メソッドの実装。
+  - 文字起こし状態（`isTranscribing`）の管理。
+- [x] **UIへの追加**
+  - Inspectorパネルに「Transcribe」ボタンを追加。
+  - 文字起こし結果の表示エリアを追加。

@@ -248,6 +248,49 @@ struct MainView: View {
                                     Text(String(format: "%.2f s", segment.duration))
                                         .font(.body)
                                 }
+                                
+                                if segment.type == .conversation {
+                                    Divider()
+                                    
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Text("Transcription")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            if viewModel.isTranscribing {
+                                                ProgressView()
+                                                    .controlSize(.small)
+                                            } else {
+                                                Button(action: {
+                                                    viewModel.transcribeSegment(id: segment.id)
+                                                }) {
+                                                    Image(systemName: "waveform.and.mic")
+                                                    Text("Transcribe")
+                                                }
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.small)
+                                            }
+                                        }
+                                        
+                                        if let transcription = segment.transcription {
+                                            ScrollView {
+                                                Text(transcription)
+                                                    .font(.body)
+                                                    .padding(8)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .background(Color.black.opacity(0.05))
+                                                    .cornerRadius(4)
+                                            }
+                                            .frame(maxHeight: 150)
+                                        } else if !viewModel.isTranscribing {
+                                            Text("No transcription yet")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
+                                        }
+                                    }
+                                }
                             }
                             
                         } else {

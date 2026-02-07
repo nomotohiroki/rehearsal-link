@@ -16,6 +16,7 @@ class MainViewModel: ObservableObject {
     @Published var isPlaying = false
     @Published var currentTime: TimeInterval = 0
     @Published var isLoopingEnabled = false
+    @Published var isTranscribing = false
     
     @Published var zoomLevel: Double = 1.0 // 1.0 = fit to width
     
@@ -24,6 +25,7 @@ class MainViewModel: ObservableObject {
     private let audioPlayerService = AudioPlayerService()
     private let projectService = ProjectService()
     private let exportService = ExportService()
+    private let transcriptionService = SpeechTranscriptionService()
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -191,6 +193,47 @@ class MainViewModel: ObservableObject {
         segments.remove(at: index)
         segments.insert(right, at: index)
         segments.insert(left, at: index)
+    }
+    
+    func transcribeSegment(id: UUID) {
+        guard let index = segments.firstIndex(where: { $0.id == id }),
+              let audioData = audioData else { return }
+        
+        let segment = segments[index]
+        guard segment.type == .conversation else { return }
+        
+        isTranscribing = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                let text = try await transcriptionService.transcribe(
+                    audioURL: audioData.url,
+                    startTime: segment.startTime,
+                    endTime: segment.endTime
+                )
+                
+                await MainActor.run {
+                    if let currentIndex = self.segments.firstIndex(where: { $0.id == id }) {
+                        let oldSegment = self.segments[currentIndex]
+                        self.segments[currentIndex] = AudioSegment(
+                            id: oldSegment.id,
+                            startTime: oldSegment.startTime,
+                            endTime: oldSegment.endTime,
+                            type: oldSegment.type,
+                            label: oldSegment.label,
+                            transcription: text
+                        )
+                    }
+                    self.isTranscribing = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "文字起こしに失敗しました: \(error.localizedDescription)"
+                    self.isTranscribing = false
+                }
+            }
+        }
     }
     
     func saveProject() {
