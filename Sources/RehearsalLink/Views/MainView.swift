@@ -79,6 +79,21 @@ struct MainView: View {
                                     )
                                     .frame(width: totalWidth)
                                     .padding(.vertical)
+                                    .overlay {
+                                        if viewModel.isAnalyzing {
+                                            ZStack {
+                                                Color.black.opacity(0.3)
+                                                VStack {
+                                                    ProgressView()
+                                                        .controlSize(.large)
+                                                    Text("Analyzing audio...")
+                                                        .font(.caption)
+                                                        .foregroundColor(.white)
+                                                        .padding(.top, 4)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             .frame(height: 340) // Adjust height to accommodate padding and scrollbar

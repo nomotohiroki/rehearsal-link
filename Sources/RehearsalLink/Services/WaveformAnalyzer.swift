@@ -15,8 +15,7 @@ struct AudioFeaturePoint {
     let highFrequencyEnergy: Float
 }
 
-@MainActor
-class WaveformAnalyzer {
+struct WaveformAnalyzer: Sendable {
     /// PCMバッファから指定されたサンプル数分の波形データを抽出します
     func generateWaveformSamples(from buffer: AVAudioPCMBuffer, targetSampleCount: Int) -> [WaveformSample] {
         print("WaveformAnalyzer: Starting analysis. FrameLength: \(buffer.frameLength), Channels: \(buffer.format.channelCount)")

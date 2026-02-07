@@ -6,6 +6,7 @@ import Combine
 class MainViewModel: ObservableObject {
     @Published var audioData: AudioData?
     @Published var isLoading = false
+    @Published var isAnalyzing = false
     @Published var errorMessage: String?
     @Published var waveformSamples: [WaveformSample] = []
     @Published var audioFeatures: [AudioFeaturePoint] = []
@@ -77,36 +78,37 @@ class MainViewModel: ObservableObject {
                 print("MainViewModel: Starting load...")
                 let data = try await audioLoadService.selectAndLoadFile()
                 self.audioData = data
+                self.isLoading = false
+                self.isAnalyzing = true
                 print("MainViewModel: AudioData set. Duration: \(data.duration)")
                 
-                let samples = waveformAnalyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-                self.waveformSamples = samples
-                print("MainViewModel: Waveform samples updated.")
-                
-                // 特徴量抽出
-                let features = waveformAnalyzer.extractFeatures(from: data.pcmBuffer)
-                self.audioFeatures = features
-                print("MainViewModel: Audio features extracted. Count: \(features.count)")
-                if let first = features.first {
-                    print("MainViewModel: First feature - Time: \(first.time), RMS: \(first.rms)")
-                }
-                
-                // セグメント判定
-                let segments = waveformAnalyzer.calculateSegments(from: features)
-                self.segments = segments
-                print("MainViewModel: Segments calculated. Count: \(segments.count)")
-                for segment in segments {
-                    print("MainViewModel: Segment - \(segment.type.rawValue): \(String(format: "%.2f", segment.startTime))s - \(String(format: "%.2f", segment.endTime))s")
-                }
-                
-                // プレイヤーにロード
+                // プレイヤーにロード（先に再生可能な状態にする）
                 audioPlayerService.load(url: data.url)
+
+                // 重い解析処理をバックグラウンドで行う
+                // Task.detachedを使用してMainActorから切り離す
+                let analyzer = self.waveformAnalyzer
+                let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
+                    let samples = analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+                    let features = analyzer.extractFeatures(from: data.pcmBuffer)
+                    let segments = analyzer.calculateSegments(from: features)
+                    return (samples, features, segments)
+                }.value
+
+                self.waveformSamples = samples
+                self.audioFeatures = features
+                self.segments = segments
+                self.isAnalyzing = false
+                
+                print("MainViewModel: Analysis complete.")
             } catch AudioLoadService.AudioLoadError.fileSelectionCancelled {
-                // Ignore
+                isLoading = false
+                isAnalyzing = false
             } catch {
                 self.errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
+                isLoading = false
+                isAnalyzing = false
             }
-            isLoading = false
         }
     }
     
@@ -212,23 +214,33 @@ class MainViewModel: ObservableObject {
                 let project = try await projectService.loadProject()
                 
                 // オーディオファイルの読み込み
-                let data = try audioLoadService.loadAudio(from: project.audioFileURL)
+                let data = try await audioLoadService.loadAudio(from: project.audioFileURL)
                 self.audioData = data
+                self.isLoading = false
+                self.isAnalyzing = true
                 
-                let samples = waveformAnalyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-                self.waveformSamples = samples
-                
-                // セグメント情報を復元
+                // セグメント情報はプロジェクトから取得（解析を待たずに表示可能）
                 self.segments = project.segments
                 
                 // プレイヤーにロード
                 audioPlayerService.load(url: data.url)
+
+                // 波形のみバックグラウンドで解析
+                let analyzer = self.waveformAnalyzer
+                let samples = await Task.detached(priority: .userInitiated) {
+                    return analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+                }.value
+                
+                self.waveformSamples = samples
+                self.isAnalyzing = false
             } catch ProjectService.ProjectError.fileSelectionCancelled {
-                // Ignore
+                isLoading = false
+                isAnalyzing = false
             } catch {
                 self.errorMessage = "プロジェクトの読み込みに失敗しました: \(error.localizedDescription)"
+                isLoading = false
+                isAnalyzing = false
             }
-            isLoading = false
         }
     }
     
