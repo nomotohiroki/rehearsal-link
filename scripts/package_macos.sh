@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Configuration
 APP_NAME="RehearsalLink"
@@ -9,7 +10,14 @@ APP_BUNDLE="$APP_NAME.app"
 ICON_FILE="AppIcon.icns"
 
 echo "🚀 Building $APP_NAME in release mode..."
-swift build -c release --arch arm64 --arch x86_64
+# Building for the host architecture to ensure reliable output path and CI compatibility
+swift build -c release
+
+# Verify binary exists
+if [ ! -f "$BUILD_DIR/$APP_NAME" ]; then
+    echo "❌ Binary not found at $BUILD_DIR/$APP_NAME"
+    exit 1
+fi
 
 echo "📦 Creating App Bundle structure..."
 rm -rf "$APP_BUNDLE"
@@ -55,5 +63,8 @@ cat <<EOF > "$APP_BUNDLE/Contents/Info.plist"
 </dict>
 </plist>
 EOF
+
+echo "🔏 Signing app bundle..."
+codesign --force --deep --sign - "$APP_BUNDLE"
 
 echo "✅ $APP_BUNDLE created successfully."
