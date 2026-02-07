@@ -12,6 +12,7 @@ struct WaveformView: View {
     var onSelectSegment: ((UUID) -> Void)? = nil
     var onUpdateSegmentType: ((UUID, SegmentType) -> Void)? = nil
     var onMoveBoundary: ((Int, TimeInterval) -> Void)? = nil
+    var onMergeWithNext: ((UUID) -> Void)? = nil
     
     var body: some View {
         GeometryReader { geometry in
@@ -48,14 +49,23 @@ struct WaveformView: View {
                     .offset(x: width * CGFloat(segment.startTime / totalDuration))
                     .allowsHitTesting(false) // クリックは背景のDragGestureで一括処理
                     .contextMenu {
-                        Button("演奏として設定") {
-                            onUpdateSegmentType?(segment.id, .performance)
+                        Section("タイプ変更") {
+                            Button("演奏として設定") {
+                                onUpdateSegmentType?(segment.id, .performance)
+                            }
+                            Button("会話として設定") {
+                                onUpdateSegmentType?(segment.id, .conversation)
+                            }
+                            Button("無音として設定") {
+                                onUpdateSegmentType?(segment.id, .silence)
+                            }
                         }
-                        Button("会話として設定") {
-                            onUpdateSegmentType?(segment.id, .conversation)
-                        }
-                        Button("無音として設定") {
-                            onUpdateSegmentType?(segment.id, .silence)
+                        
+                        Section("編集") {
+                            Button("次のセグメントと結合") {
+                                onMergeWithNext?(segment.id)
+                            }
+                            .disabled(segment.id == segments.last?.id)
                         }
                     }
                 }

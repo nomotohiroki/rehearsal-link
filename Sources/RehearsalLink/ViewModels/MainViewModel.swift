@@ -291,6 +291,40 @@ class MainViewModel: ObservableObject {
         segments.insert(right, at: index)
         segments.insert(left, at: index)
     }
+
+    func mergeWithNext(id: UUID) {
+        guard let index = segments.firstIndex(where: { $0.id == id }),
+              index < segments.count - 1 else { return }
+        
+        let current = segments[index]
+        let next = segments[index + 1]
+        
+        // 文字起こしテキストの結合
+        let mergedTranscription: String?
+        if let t1 = current.transcription, let t2 = next.transcription {
+            mergedTranscription = t1 + "\n" + t2
+        } else {
+            mergedTranscription = current.transcription ?? next.transcription
+        }
+        
+        // ラベルの継承（左優先）
+        let mergedLabel: String? = current.label ?? next.label
+        
+        let mergedSegment = AudioSegment(
+            id: current.id, // IDを保持
+            startTime: current.startTime,
+            endTime: next.endTime,
+            type: current.type, // 左側のタイプを優先
+            label: mergedLabel,
+            transcription: mergedTranscription
+        )
+        
+        segments.remove(at: index + 1)
+        segments[index] = mergedSegment
+        
+        // 結合後のセグメントを選択
+        selectedSegmentId = mergedSegment.id
+    }
     
     func transcribeSegment(id: UUID) {
         guard let index = segments.firstIndex(where: { $0.id == id }),

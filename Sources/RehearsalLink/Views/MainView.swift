@@ -75,6 +75,9 @@ struct MainView: View {
                                         },
                                         onMoveBoundary: { index, newTime in
                                             viewModel.moveBoundary(index: index, newTime: newTime)
+                                        },
+                                        onMergeWithNext: { id in
+                                            viewModel.mergeWithNext(id: id)
                                         }
                                     )
                                     .frame(width: totalWidth)
@@ -264,6 +267,15 @@ struct MainView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(.top, 4)
+                                
+                                Button(action: {
+                                    viewModel.mergeWithNext(id: segment.id)
+                                }) {
+                                    Label("Merge with Next", systemImage: "arrow.down.and.line.horizontal.and.arrow.up")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(segment.id == viewModel.segments.last?.id)
+                                .help("Merge this segment with the next one")
                                 
                                 if segment.type == .conversation {
                                     Divider()
