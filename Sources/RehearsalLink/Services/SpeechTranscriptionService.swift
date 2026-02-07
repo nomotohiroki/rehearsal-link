@@ -1,12 +1,12 @@
 import Foundation
 import Speech
-import AVFoundation
+@preconcurrency import AVFoundation
 
 actor SpeechTranscriptionService {
     enum TranscriptionError: Error {
         case notAvailable
         case unsupportedLocale
-        case transcriptionFailed(Error)
+        case transcriptionFailed(Error?)
         case audioExportFailed
     }
     
@@ -25,7 +25,7 @@ actor SpeechTranscriptionService {
             throw TranscriptionError.notAvailable
         }
 
-        // Create a temporary file for the segment to avoid SpeechAnalyzer overhead on large files
+        // Create a temporary file for the segment
         let tempDir = FileManager.default.temporaryDirectory
         let tempFileURL = tempDir.appendingPathComponent(UUID().uuidString + ".m4a")
         
@@ -40,30 +40,26 @@ actor SpeechTranscriptionService {
             try? FileManager.default.removeItem(at: tempFileURL)
         }
 
-        // Use SpeechAnalyzer on the small temporary file
-        let audioFile = try AVAudioFile(forReading: tempFileURL)
-        let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
-        
-        // Start analysis in a separate task
-        let analysisTask = Task {
-            try await analyzer.start(inputAudioFile: audioFile, finishAfterFile: true)
+        // Use SFSpeechRecognizer
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw TranscriptionError.notAvailable
         }
         
-        var transcript = ""
+        let request = SFSpeechURLRecognitionRequest(url: tempFileURL)
+        request.shouldReportPartialResults = false
         
-        do {
-            for try await result in transcriber.results {
-                transcript += String(result.text.characters)
+        return try await withCheckedThrowingContinuation { continuation in
+            recognizer.recognitionTask(with: request) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: TranscriptionError.transcriptionFailed(error))
+                    return
+                }
+                
+                if let result = result, result.isFinal {
+                    continuation.resume(returning: result.bestTranscription.formattedString)
+                }
             }
-            // Wait for analysis to finish
-            try await analysisTask.value
-        } catch {
-            analysisTask.cancel()
-            throw error
         }
-        
-        return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     /// Extracts a segment of audio into a new temporary M4A file
