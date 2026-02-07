@@ -47,8 +47,14 @@ jobs:
           chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
           # Info.plist のバージョン更新
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
+          PLIST_PATH="$APP_BUNDLE/Contents/Info.plist"
+          # CFBundleShortVersionString の更新
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$PLIST_PATH" || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION_NUMBER" "$PLIST_PATH"
+          
+          # CFBundleVersion の更新 (存在しない場合は追加)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$PLIST_PATH" || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION_NUMBER" "$PLIST_PATH"
 
           # 署名手順書の作成
           cat > SIGNING_INSTRUCTIONS.md << EOF
