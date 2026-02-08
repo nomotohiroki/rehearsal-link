@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct MainView: View {
     @StateObject private var viewModel = MainViewModel()
@@ -49,52 +50,84 @@ struct MainView: View {
                             .padding(.top, 8)
                             
                             GeometryReader { outerGeometry in
-                                ScrollView(.horizontal, showsIndicators: true) {
-                                    let baseWidth = outerGeometry.size.width
-                                    let totalWidth = max(baseWidth, baseWidth * CGFloat(viewModel.zoomLevel))
-                                    
-                                    WaveformView(
-                                        samples: viewModel.waveformSamples,
-                                        segments: viewModel.segments,
-                                        selectedSegmentId: viewModel.selectedSegmentId,
-                                        totalDuration: audioData.duration,
-                                        width: totalWidth,
-                                        playbackPosition: {
-                                            guard audioData.duration > 0 else { return 0 }
-                                            let progress = viewModel.currentTime / audioData.duration
+                                ScrollViewReader { proxy in
+                                    ScrollView(.horizontal, showsIndicators: true) {
+                                        let baseWidth = outerGeometry.size.width
+                                        let totalWidth = max(baseWidth, baseWidth * CGFloat(viewModel.zoomLevel))
+                                        let playbackPosition: Double = {
+                                            guard let duration = viewModel.audioData?.duration, duration > 0 else { return 0 }
+                                            let progress = viewModel.currentTime / duration
                                             return progress.isFinite ? max(0, min(1, progress)) : 0
-                                        }(),
-                                        onSeek: { progress in
-                                            viewModel.seek(progress: progress)
-                                        },
-                                        onSelectSegment: { id in
-                                            viewModel.selectedSegmentId = id
-                                        },
-                                        onUpdateSegmentType: { id, type in
-                                            viewModel.updateSegmentType(id: id, type: type)
-                                        },
-                                        onMoveBoundary: { index, newTime in
-                                            viewModel.moveBoundary(index: index, newTime: newTime)
-                                        },
-                                        onMergeWithNext: { id in
-                                            viewModel.mergeWithNext(id: id)
+                                        }()
+                                        
+                                        ZStack(alignment: .leading) {
+                                            WaveformView(
+                                                samples: viewModel.waveformSamples,
+                                                segments: viewModel.segments,
+                                                selectedSegmentId: viewModel.selectedSegmentId,
+                                                totalDuration: audioData.duration,
+                                                width: totalWidth,
+                                                playbackPosition: playbackPosition,
+                                                onSeek: { progress in
+                                                    viewModel.seek(progress: progress)
+                                                },
+                                                onSelectSegment: { id in
+                                                    viewModel.selectedSegmentId = id
+                                                },
+                                                onUpdateSegmentType: { id, type in
+                                                    viewModel.updateSegmentType(id: id, type: type)
+                                                },
+                                                onMoveBoundary: { index, newTime in
+                                                    viewModel.moveBoundary(index: index, newTime: newTime)
+                                                },
+                                                onMergeWithNext: { id in
+                                                    viewModel.mergeWithNext(id: id)
+                                                }
+                                            )
+                                            .frame(width: totalWidth)
+                                            
+                                            // Invisible marker for scrolling
+                                            // Using HStack + Spacer for more reliable ScrollViewReader tracking
+                                            HStack(spacing: 0) {
+                                                Spacer(minLength: 0)
+                                                    .frame(width: totalWidth * CGFloat(playbackPosition))
+                                                Rectangle()
+                                                    .fill(Color.clear)
+                                                    .frame(width: 1)
+                                                    .id("playhead")
+                                                Spacer(minLength: 0)
+                                            }
+                                            .frame(width: totalWidth, alignment: .leading)
                                         }
-                                    )
-                                    .frame(width: totalWidth)
-                                    .padding(.vertical)
-                                    .overlay {
-                                        if viewModel.isAnalyzing {
-                                            ZStack {
-                                                Color.black.opacity(0.3)
-                                                VStack {
-                                                    ProgressView()
-                                                        .controlSize(.large)
-                                                    Text("Analyzing audio...")
-                                                        .font(.caption)
-                                                        .foregroundColor(.white)
-                                                        .padding(.top, 4)
+                                        .padding(.vertical)
+                                        .overlay {
+                                            if viewModel.isAnalyzing {
+                                                ZStack {
+                                                    Color.black.opacity(0.3)
+                                                    VStack {
+                                                        ProgressView()
+                                                            .controlSize(.large)
+                                                        Text("Analyzing audio...")
+                                                            .font(.caption)
+                                                            .foregroundColor(.white)
+                                                            .padding(.top, 4)
+                                                    }
                                                 }
                                             }
+                                        }
+                                    }
+                                    .onChange(of: viewModel.zoomLevel) {
+                                        // Delay slightly to allow layout to update with new zoom width
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            withAnimation(.easeInOut(duration: 0.1)) {
+                                                proxy.scrollTo("playhead", anchor: .center)
+                                            }
+                                        }
+                                    }
+                                    .onChange(of: viewModel.currentTime) {
+                                        if viewModel.isPlaying {
+                                            // Non-animated scroll during playback for smoothness
+                                            proxy.scrollTo("playhead", anchor: .center)
                                         }
                                     }
                                 }
@@ -162,6 +195,16 @@ struct MainView: View {
                             }
                             .help("Split segment at playhead")
                             
+                            Button(action: {
+                                if let selectedId = viewModel.selectedSegmentId {
+                                    viewModel.mergeWithNext(id: selectedId)
+                                }
+                            }) {
+                                Label("Merge", systemImage: "arrow.down.and.line.horizontal.and.arrow.up")
+                            }
+                            .disabled(viewModel.selectedSegmentId == nil || viewModel.selectedSegmentId == viewModel.segments.last?.id)
+                            .help("Merge selected segment with the next one")
+                            
                             Spacer()
                         }
                         .padding()
@@ -211,17 +254,6 @@ struct MainView: View {
                             
                             VStack(alignment: .leading, spacing: 20) {
                                 VStack(alignment: .leading) {
-                                    Text("Label")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    TextField("Segment Label", text: Binding(
-                                        get: { segment.label ?? "" },
-                                        set: { newLabel in viewModel.updateSegmentLabel(id: segment.id, label: newLabel) }
-                                    ))
-                                    .textFieldStyle(.roundedBorder)
-                                }
-                                
-                                VStack(alignment: .leading) {
                                     Text("Type")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -248,16 +280,6 @@ struct MainView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                     VStack(alignment: .leading) {
-                                        Text("End Time")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                        Text(formatTime(segment.endTime))
-                                            .font(.body)
-                                            .monospacedDigit()
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    
-                                    VStack(alignment: .leading) {
                                         Text("Duration")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
@@ -267,15 +289,23 @@ struct MainView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(.top, 4)
-                                
-                                Button(action: {
-                                    viewModel.mergeWithNext(id: segment.id)
-                                }) {
-                                    Label("Merge with Next", systemImage: "arrow.down.and.line.horizontal.and.arrow.up")
+
+                                VStack(alignment: .leading) {
+                                    Text("Label")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    TextField("Segment Label", text: Binding(
+                                        get: { segment.label ?? "" },
+                                        set: { newLabel in viewModel.updateSegmentLabel(id: segment.id, label: newLabel) }
+                                    ))
+                                    .textFieldStyle(.roundedBorder)
                                 }
-                                .buttonStyle(.bordered)
-                                .disabled(segment.id == viewModel.segments.last?.id)
-                                .help("Merge this segment with the next one")
+                                
+                                Toggle("Exclude from Export", isOn: Binding(
+                                    get: { segment.isExcludedFromExport },
+                                    set: { newValue in viewModel.updateSegmentExportExclusion(id: segment.id, isExcluded: newValue) }
+                                ))
+                                .toggleStyle(.checkbox)
                                 
                                 if segment.type == .conversation {
                                     Divider()
@@ -388,6 +418,19 @@ struct MainView: View {
                     }
                     .disabled(viewModel.isLoading || viewModel.audioData == nil)
                 }
+            }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                if let provider = providers.first {
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                        if let url = url {
+                            DispatchQueue.main.async {
+                                viewModel.handleFile(at: url)
+                            }
+                        }
+                    }
+                    return true
+                }
+                return false
             }
         }
     }

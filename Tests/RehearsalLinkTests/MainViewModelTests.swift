@@ -36,6 +36,30 @@ final class MainViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.segments[0].label, "New Label")
     }
     
+    func testUpdateSegmentLabelPreservesTranscription() {
+        let id = UUID()
+        let transcription = "Test transcription"
+        let segment = AudioSegment(id: id, startTime: 0, endTime: 10, type: .performance, transcription: transcription)
+        viewModel.segments = [segment]
+        
+        viewModel.updateSegmentLabel(id: id, label: "New Label")
+        
+        XCTAssertEqual(viewModel.segments[0].label, "New Label")
+        XCTAssertEqual(viewModel.segments[0].transcription, transcription)
+    }
+    
+    func testUpdateSegmentTypePreservesTranscription() {
+        let id = UUID()
+        let transcription = "Test transcription"
+        let segment = AudioSegment(id: id, startTime: 0, endTime: 10, type: .conversation, transcription: transcription)
+        viewModel.segments = [segment]
+        
+        viewModel.updateSegmentType(id: id, type: .performance)
+        
+        XCTAssertEqual(viewModel.segments[0].type, .performance)
+        XCTAssertEqual(viewModel.segments[0].transcription, transcription)
+    }
+    
     func testSplitSegment() {
         let segment = AudioSegment(startTime: 0, endTime: 10, type: .performance)
         viewModel.segments = [segment]
@@ -61,5 +85,22 @@ final class MainViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.segments[0].startTime, 0)
         XCTAssertEqual(viewModel.segments[0].endTime, 10.0)
         XCTAssertEqual(viewModel.segments[0].transcription, "Part 1\nPart 2")
+    }
+    
+    func testMoveBoundaryPreservesTranscription() {
+        let id1 = UUID()
+        let id2 = UUID()
+        let t1 = "Transcription 1"
+        let t2 = "Transcription 2"
+        let s1 = AudioSegment(id: id1, startTime: 0, endTime: 5, type: .performance, transcription: t1)
+        let s2 = AudioSegment(id: id2, startTime: 5, endTime: 10, type: .performance, transcription: t2)
+        viewModel.segments = [s1, s2]
+        
+        viewModel.moveBoundary(index: 0, newTime: 6.0)
+        
+        XCTAssertEqual(viewModel.segments[0].endTime, 6.0)
+        XCTAssertEqual(viewModel.segments[0].transcription, t1)
+        XCTAssertEqual(viewModel.segments[1].startTime, 6.0)
+        XCTAssertEqual(viewModel.segments[1].transcription, t2)
     }
 }

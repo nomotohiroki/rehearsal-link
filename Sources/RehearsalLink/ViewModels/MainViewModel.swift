@@ -82,25 +82,36 @@ class MainViewModel: ObservableObject {
         Task {
             do {
                 let audioURL = try await audioLoadService.selectAudioFile()
-                
+                handleFile(at: audioURL)
+            } catch AudioLoadService.AudioLoadError.fileSelectionCancelled {
+                // Ignore
+            } catch {
+                self.errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
+                isLoading = false
+                isAnalyzing = false
+            }
+        }
+    }
+
+    func handleFile(at url: URL) {
+        Task {
+            do {
                 // プロジェクトファイルの候補を複数チェック
-                let baseURL = audioURL.deletingPathExtension()
+                let baseURL = url.deletingPathExtension()
                 let projectURL = baseURL.appendingPathExtension("rehearsallink")
                 let projectJSONURL = baseURL.appendingPathExtension("rehearsallink").appendingPathExtension("json")
                 
                 if FileManager.default.fileExists(atPath: projectURL.path) {
-                    self.pendingAudioURL = audioURL
+                    self.pendingAudioURL = url
                     self.pendingProjectURL = projectURL
                     self.showProjectDetectedAlert = true
                 } else if FileManager.default.fileExists(atPath: projectJSONURL.path) {
-                    self.pendingAudioURL = audioURL
+                    self.pendingAudioURL = url
                     self.pendingProjectURL = projectJSONURL
                     self.showProjectDetectedAlert = true
                 } else {
-                    try await performLoadAudio(from: audioURL)
+                    try await performLoadAudio(from: url)
                 }
-            } catch AudioLoadService.AudioLoadError.fileSelectionCancelled {
-                // Ignore
             } catch {
                 self.errorMessage = "ファイルの読み込みに失敗しました: \(error.localizedDescription)"
                 isLoading = false
@@ -226,7 +237,9 @@ class MainViewModel: ObservableObject {
                 startTime: oldSegment.startTime,
                 endTime: oldSegment.endTime,
                 type: type,
-                label: oldSegment.label
+                label: oldSegment.label,
+                transcription: oldSegment.transcription,
+                isExcludedFromExport: oldSegment.isExcludedFromExport
             )
         }
     }
@@ -239,7 +252,9 @@ class MainViewModel: ObservableObject {
                 startTime: oldSegment.startTime,
                 endTime: oldSegment.endTime,
                 type: oldSegment.type,
-                label: label.isEmpty ? nil : label
+                label: label.isEmpty ? nil : label,
+                transcription: oldSegment.transcription,
+                isExcludedFromExport: oldSegment.isExcludedFromExport
             )
         }
     }
@@ -253,7 +268,23 @@ class MainViewModel: ObservableObject {
                 endTime: oldSegment.endTime,
                 type: oldSegment.type,
                 label: oldSegment.label,
-                transcription: text
+                transcription: text,
+                isExcludedFromExport: oldSegment.isExcludedFromExport
+            )
+        }
+    }
+
+    func updateSegmentExportExclusion(id: UUID, isExcluded: Bool) {
+        if let index = segments.firstIndex(where: { $0.id == id }) {
+            let oldSegment = segments[index]
+            segments[index] = AudioSegment(
+                id: oldSegment.id,
+                startTime: oldSegment.startTime,
+                endTime: oldSegment.endTime,
+                type: oldSegment.type,
+                label: oldSegment.label,
+                transcription: oldSegment.transcription,
+                isExcludedFromExport: isExcluded
             )
         }
     }
@@ -269,8 +300,24 @@ class MainViewModel: ObservableObject {
         let left = segments[index]
         let right = segments[index+1]
         
-        segments[index] = AudioSegment(id: left.id, startTime: left.startTime, endTime: clampedTime, type: left.type, label: left.label)
-        segments[index+1] = AudioSegment(id: right.id, startTime: clampedTime, endTime: right.endTime, type: right.type, label: right.label)
+        segments[index] = AudioSegment(
+            id: left.id,
+            startTime: left.startTime,
+            endTime: clampedTime,
+            type: left.type,
+            label: left.label,
+            transcription: left.transcription,
+            isExcludedFromExport: left.isExcludedFromExport
+        )
+        segments[index+1] = AudioSegment(
+            id: right.id,
+            startTime: clampedTime,
+            endTime: right.endTime,
+            type: right.type,
+            label: right.label,
+            transcription: right.transcription,
+            isExcludedFromExport: right.isExcludedFromExport
+        )
     }
     
     func splitSegment(at time: TimeInterval) {
@@ -284,8 +331,8 @@ class MainViewModel: ObservableObject {
             return
         }
         
-        let left = AudioSegment(startTime: segment.startTime, endTime: time, type: segment.type)
-        let right = AudioSegment(startTime: time, endTime: segment.endTime, type: segment.type)
+        let left = AudioSegment(startTime: segment.startTime, endTime: time, type: segment.type, isExcludedFromExport: segment.isExcludedFromExport)
+        let right = AudioSegment(startTime: time, endTime: segment.endTime, type: segment.type, isExcludedFromExport: segment.isExcludedFromExport)
         
         segments.remove(at: index)
         segments.insert(right, at: index)
@@ -316,7 +363,8 @@ class MainViewModel: ObservableObject {
             endTime: next.endTime,
             type: current.type, // 左側のタイプを優先
             label: mergedLabel,
-            transcription: mergedTranscription
+            transcription: mergedTranscription,
+            isExcludedFromExport: current.isExcludedFromExport // 左側の設定を優先
         )
         
         segments.remove(at: index + 1)
@@ -353,7 +401,8 @@ class MainViewModel: ObservableObject {
                             endTime: oldSegment.endTime,
                             type: oldSegment.type,
                             label: oldSegment.label,
-                            transcription: text
+                            transcription: text,
+                            isExcludedFromExport: oldSegment.isExcludedFromExport
                         )
                     }
                     self.isTranscribing = false
@@ -401,7 +450,8 @@ class MainViewModel: ObservableObject {
                                 endTime: oldSegment.endTime,
                                 type: oldSegment.type,
                                 label: oldSegment.label,
-                                transcription: text
+                                transcription: text,
+                                isExcludedFromExport: oldSegment.isExcludedFromExport
                             )
                         }
                         completedCount += 1

@@ -94,12 +94,10 @@ class AudioPlayerService: ObservableObject {
     func stop() {
         playerNode.stop()
         isPlaying = false
-        currentTime = 0
-        startSampleTime = 0
         stopTimer()
         
         if audioFile != nil {
-            scheduleBuffer(from: 0)
+            scheduleBuffer(from: currentTime)
         }
     }
     

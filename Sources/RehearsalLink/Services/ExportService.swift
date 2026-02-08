@@ -25,6 +25,8 @@ actor ExportService {
         var trackTimeRanges: [CMTimeRange] = []
         
         for segment in segments {
+            if segment.isExcludedFromExport { continue }
+            
             let start = CMTime(seconds: segment.startTime, preferredTimescale: 600)
             let duration = CMTime(seconds: segment.duration, preferredTimescale: 600)
             let range = CMTimeRange(start: start, duration: duration)

@@ -129,6 +129,10 @@ struct WaveformView: View {
     }
     
     private func segmentColor(for segment: AudioSegment) -> Color {
+        if segment.isExcludedFromExport {
+            return Color.gray.opacity(0.3)
+        }
+        
         switch segment.type {
         case .performance:
             return Color.blue.opacity(0.2)
