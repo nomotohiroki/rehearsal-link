@@ -12,7 +12,7 @@
 ### Phase 11: 開発環境の整備 (Lint/Format/Hook)
 - [x] **Lint/Formatツールの導入と設定**
   - **内容**: SwiftLint, SwiftFormatをインストールし、プロジェクトに適した設定ファイル(.swiftlint.yml等)を作成する。
-- [ ] **Lefthookの導入と設定**
+- [x] **Lefthookの導入と設定**
   - **内容**: Lefthookをインストールし、pre-commitフックでLint, Format, Testを実行するように設定する。
 
 ## 完了したフェーズ
