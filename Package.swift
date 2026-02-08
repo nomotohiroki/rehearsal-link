@@ -16,6 +16,6 @@ let package = Package(
             name: "RehearsalLinkTests",
             dependencies: ["RehearsalLink"],
             path: "Tests/RehearsalLinkTests"
-        ),
+        )
     ]
 )

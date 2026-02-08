@@ -13,7 +13,7 @@ struct WaveformView: View {
     var onUpdateSegmentType: ((UUID, SegmentType) -> Void)? = nil
     var onMoveBoundary: ((Int, TimeInterval) -> Void)? = nil
     var onMergeWithNext: ((UUID) -> Void)? = nil
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
@@ -27,7 +27,7 @@ struct WaveformView: View {
                                 let locationX = value.location.x
                                 let progress = locationX / width
                                 onSeek?(Double(progress))
-                                
+
                                 // 座標ベースでのセグメント選択
                                 let time = Double(progress) * totalDuration
                                 if let hitSegment = segments.first(where: { $0.startTime <= time && time < $0.endTime }) {
@@ -35,7 +35,7 @@ struct WaveformView: View {
                                 }
                             }
                     )
-                
+
                 // セグメント背景
                 ForEach(segments) { segment in
                     ZStack {
@@ -60,7 +60,7 @@ struct WaveformView: View {
                                 onUpdateSegmentType?(segment.id, .silence)
                             }
                         }
-                        
+
                         Section("編集") {
                             Button("次のセグメントと結合") {
                                 onMergeWithNext?(segment.id)
@@ -69,9 +69,9 @@ struct WaveformView: View {
                         }
                     }
                 }
-                
+
                 // 境界ハンドル
-                ForEach(0..<max(0, segments.count - 1), id: \.self) { index in
+                ForEach(0 ..< max(0, segments.count - 1), id: \.self) { index in
                     let segment = segments[index]
                     Rectangle()
                         .fill(Color.white.opacity(0.5))
@@ -94,31 +94,31 @@ struct WaveformView: View {
                             }
                         }
                 }
-                
+
                 Path { path in
                     let height = geometry.size.height
                     let middle = height / 2
-                    
+
                     guard samples.count > 1 else { return }
-                    
+
                     let step = width / CGFloat(samples.count - 1)
-                    
+
                     // Top part of the waveform
                     path.move(to: CGPoint(x: 0, y: middle + CGFloat(samples[0].max) * middle))
-                    for i in 1..<samples.count {
+                    for i in 1 ..< samples.count {
                         path.addLine(to: CGPoint(x: CGFloat(i) * step, y: middle + CGFloat(samples[i].max) * middle))
                     }
-                    
+
                     // Bottom part of the waveform (reversed)
-                    for i in (0..<samples.count).reversed() {
+                    for i in (0 ..< samples.count).reversed() {
                         path.addLine(to: CGPoint(x: CGFloat(i) * step, y: middle + CGFloat(samples[i].min) * middle))
                     }
-                    
+
                     path.closeSubpath()
                 }
                 .fill(color)
                 .allowsHitTesting(false)
-                
+
                 // 再生カーソル
                 Rectangle()
                     .fill(Color.red)
@@ -127,12 +127,12 @@ struct WaveformView: View {
             }
         }
     }
-    
+
     private func segmentColor(for segment: AudioSegment) -> Color {
         if segment.isExcludedFromExport {
             return Color.gray.opacity(0.3)
         }
-        
+
         switch segment.type {
         case .performance:
             return Color.blue.opacity(0.2)

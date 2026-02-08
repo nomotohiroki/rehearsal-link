@@ -1,15 +1,15 @@
-import XCTest
 @testable import RehearsalLink
+import XCTest
 
 @MainActor
 final class ProjectServiceTests: XCTestCase {
     var service: ProjectService!
-    
+
     override func setUp() async throws {
         try await super.setUp()
         service = ProjectService()
     }
-    
+
     func testLoadProjectFromData() async throws {
         let json = """
         {
@@ -26,14 +26,15 @@ final class ProjectServiceTests: XCTestCase {
           "createdAt": 760000000.0,
           "modifiedAt": 760000000.0
         }
-        """.data(using: .utf8)!
-        
+        """
+        let jsonData = Data(json.utf8)
+
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.rehearsallink")
-        try json.write(to: tempURL)
+        try jsonData.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
-        
+
         let project = try await service.loadProject(from: tempURL)
-        
+
         XCTAssertEqual(project.audioFileURL.lastPathComponent, "test.m4a")
         XCTAssertEqual(project.segments.count, 1)
         XCTAssertEqual(project.segments[0].type, .performance)

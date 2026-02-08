@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 struct MainView: View {
     @StateObject private var viewModel = MainViewModel()
-    
+
     var body: some View {
         NavigationStack {
             HSplitView {
@@ -21,7 +21,7 @@ struct MainView: View {
                         }
                         .padding()
                         .background(Color(nsColor: .controlBackgroundColor))
-                        
+
                         // Waveform Area
                         VStack(spacing: 0) {
                             // Zoom Controls
@@ -30,25 +30,25 @@ struct MainView: View {
                                     Image(systemName: "minus.magnifyingglass")
                                 }
                                 .disabled(viewModel.zoomLevel <= 1.0)
-                                
-                                Slider(value: $viewModel.zoomLevel, in: 1.0...50.0)
+
+                                Slider(value: $viewModel.zoomLevel, in: 1.0 ... 50.0)
                                     .frame(width: 150)
-                                
+
                                 Button(action: { viewModel.zoomIn() }) {
                                     Image(systemName: "plus.magnifyingglass")
                                 }
                                 .disabled(viewModel.zoomLevel >= 50.0)
-                                
+
                                 Button("Reset") {
                                     viewModel.resetZoom()
                                 }
                                 .buttonStyle(.link)
-                                
+
                                 Spacer()
                             }
                             .padding(.horizontal)
                             .padding(.top, 8)
-                            
+
                             GeometryReader { outerGeometry in
                                 ScrollViewReader { proxy in
                                     ScrollView(.horizontal, showsIndicators: true) {
@@ -59,7 +59,7 @@ struct MainView: View {
                                             let progress = viewModel.currentTime / duration
                                             return progress.isFinite ? max(0, min(1, progress)) : 0
                                         }()
-                                        
+
                                         ZStack(alignment: .leading) {
                                             WaveformView(
                                                 samples: viewModel.waveformSamples,
@@ -85,7 +85,7 @@ struct MainView: View {
                                                 }
                                             )
                                             .frame(width: totalWidth)
-                                            
+
                                             // Invisible marker for scrolling
                                             // Using HStack + Spacer for more reliable ScrollViewReader tracking
                                             HStack(spacing: 0) {
@@ -147,13 +147,13 @@ struct MainView: View {
                                 .padding()
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         // Transport Bar
                         HStack(spacing: 24) {
                             Spacer()
-                            
+
                             Button(action: {
                                 viewModel.isLoopingEnabled.toggle()
                             }) {
@@ -164,7 +164,7 @@ struct MainView: View {
                             .buttonStyle(.plain)
                             .help("Loop selected segment")
                             .disabled(viewModel.selectedSegmentId == nil)
-                            
+
                             Button(action: {
                                 viewModel.togglePlayback()
                             }) {
@@ -172,7 +172,7 @@ struct MainView: View {
                                     .font(.system(size: 44))
                             }
                             .buttonStyle(.plain)
-                            
+
                             Button(action: {
                                 viewModel.stopPlayback()
                             }) {
@@ -180,21 +180,21 @@ struct MainView: View {
                                     .font(.title2)
                             }
                             .buttonStyle(.plain)
-                            
+
                             Text(formatTime(viewModel.currentTime))
                                 .font(.title2)
                                 .monospacedDigit()
                                 .frame(width: 120, alignment: .center)
                                 .background(Color.black.opacity(0.1))
                                 .cornerRadius(8)
-                            
+
                             Button(action: {
                                 viewModel.splitSegment(at: viewModel.currentTime)
                             }) {
                                 Label("Split", systemImage: "scissors")
                             }
                             .help("Split segment at playhead")
-                            
+
                             Button(action: {
                                 if let selectedId = viewModel.selectedSegmentId {
                                     viewModel.mergeWithNext(id: selectedId)
@@ -204,12 +204,12 @@ struct MainView: View {
                             }
                             .disabled(viewModel.selectedSegmentId == nil || viewModel.selectedSegmentId == viewModel.segments.last?.id)
                             .help("Merge selected segment with the next one")
-                            
+
                             Spacer()
                         }
                         .padding()
                         .background(Color(nsColor: .windowBackgroundColor))
-                        
+
                     } else if viewModel.isLoading {
                         ProgressView("Loading...")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -230,7 +230,7 @@ struct MainView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    
+
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .foregroundColor(.red)
@@ -241,17 +241,16 @@ struct MainView: View {
                     }
                 }
                 .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
-                
+
                 // Inspector Panel
                 if viewModel.audioData != nil {
                     VStack(alignment: .leading, spacing: 20) {
                         Text("Inspector")
                             .font(.headline)
                             .padding(.bottom, 10)
-                        
+
                         if let selectedId = viewModel.selectedSegmentId,
                            let segment = viewModel.segments.first(where: { $0.id == selectedId }) {
-                            
                             VStack(alignment: .leading, spacing: 20) {
                                 VStack(alignment: .leading) {
                                     Text("Type")
@@ -267,7 +266,7 @@ struct MainView: View {
                                     }
                                     .labelsHidden()
                                 }
-                                
+
                                 HStack(alignment: .top, spacing: 12) {
                                     VStack(alignment: .leading) {
                                         Text("Start Time")
@@ -278,7 +277,7 @@ struct MainView: View {
                                             .monospacedDigit()
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    
+
                                     VStack(alignment: .leading) {
                                         Text("Duration")
                                             .font(.caption2)
@@ -300,16 +299,16 @@ struct MainView: View {
                                     ))
                                     .textFieldStyle(.roundedBorder)
                                 }
-                                
+
                                 Toggle("Exclude from Export", isOn: Binding(
                                     get: { segment.isExcludedFromExport },
                                     set: { newValue in viewModel.updateSegmentExportExclusion(id: segment.id, isExcluded: newValue) }
                                 ))
                                 .toggleStyle(.checkbox)
-                                
+
                                 if segment.type == .conversation {
                                     Divider()
-                                    
+
                                     VStack(alignment: .leading, spacing: 8) {
                                         HStack {
                                             Text("Transcription")
@@ -330,7 +329,7 @@ struct MainView: View {
                                                 .controlSize(.small)
                                             }
                                         }
-                                        
+
                                         if segment.transcription != nil {
                                             TextEditor(text: Binding(
                                                 get: { segment.transcription ?? "" },
@@ -351,7 +350,7 @@ struct MainView: View {
                                 }
                             }
                             .frame(maxHeight: .infinity, alignment: .top)
-                            
+
                         } else {
                             Text("No segment selected")
                                 .foregroundColor(.secondary)
@@ -372,7 +371,7 @@ struct MainView: View {
                 Button("Load Audio Only") {
                     viewModel.loadAudioOnly()
                 }
-                Button("Cancel", role: .cancel) { }
+                Button("Cancel", role: .cancel) {}
             } message: {
                 Text("A project file was found for this audio. Would you like to load the existing project or start fresh?")
             }
@@ -382,17 +381,17 @@ struct MainView: View {
                         Label("Open Audio", systemImage: "music.note.list")
                     }
                     .disabled(viewModel.isLoading)
-                    
+
                     Button(action: { viewModel.loadProject() }) {
                         Label("Open Project", systemImage: "folder")
                     }
                     .disabled(viewModel.isLoading)
-                    
+
                     Button(action: { viewModel.saveProject() }) {
                         Label("Save", systemImage: "square.and.arrow.down")
                     }
                     .disabled(viewModel.isLoading || viewModel.audioData == nil)
-                    
+
                     Menu {
                         Section("Audio Export") {
                             Button("Export Performance Only") {
@@ -402,13 +401,13 @@ struct MainView: View {
                                 viewModel.exportSegments(type: .conversation)
                             }
                         }
-                        
+
                         Section("Transcription") {
                             Button("Transcribe All Conversations") {
                                 viewModel.transcribeAllConversations()
                             }
                             .disabled(viewModel.isBatchTranscribing)
-                            
+
                             Button("Export Transcriptions (.txt)") {
                                 viewModel.exportAllTranscriptions()
                             }
@@ -434,7 +433,7 @@ struct MainView: View {
             }
         }
     }
-    
+
     private func formatTime(_ time: TimeInterval) -> String {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60

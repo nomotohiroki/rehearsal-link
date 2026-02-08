@@ -1,5 +1,5 @@
-import XCTest
 @testable import RehearsalLink
+import XCTest
 
 final class AudioSegmentTests: XCTestCase {
     func testAudioSegmentInitialization() {
@@ -12,7 +12,7 @@ final class AudioSegmentTests: XCTestCase {
             label: "Test Label",
             transcription: "Test Transcription"
         )
-        
+
         XCTAssertEqual(segment.id, id)
         XCTAssertEqual(segment.startTime, 0.0)
         XCTAssertEqual(segment.endTime, 10.0)
@@ -21,7 +21,7 @@ final class AudioSegmentTests: XCTestCase {
         XCTAssertEqual(segment.transcription, "Test Transcription")
         XCTAssertEqual(segment.duration, 10.0)
     }
-    
+
     func testSegmentDuration() {
         let segment = AudioSegment(startTime: 5.5, endTime: 12.3, type: .silence)
         XCTAssertEqual(segment.duration, 6.8, accuracy: 0.001)

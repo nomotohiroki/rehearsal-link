@@ -14,12 +14,20 @@ struct AudioSegment: Identifiable, Codable {
     var label: String?
     var transcription: String?
     var isExcludedFromExport: Bool = false
-    
+
     enum CodingKeys: String, CodingKey {
         case id, startTime, endTime, type, label, transcription, isExcludedFromExport
     }
-    
-    init(id: UUID = UUID(), startTime: TimeInterval, endTime: TimeInterval, type: SegmentType, label: String? = nil, transcription: String? = nil, isExcludedFromExport: Bool = false) {
+
+    init(
+        id: UUID = UUID(),
+        startTime: TimeInterval,
+        endTime: TimeInterval,
+        type: SegmentType,
+        label: String? = nil,
+        transcription: String? = nil,
+        isExcludedFromExport: Bool = false
+    ) {
         self.id = id
         self.startTime = startTime
         self.endTime = endTime
@@ -28,7 +36,7 @@ struct AudioSegment: Identifiable, Codable {
         self.transcription = transcription
         self.isExcludedFromExport = isExcludedFromExport
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -39,7 +47,7 @@ struct AudioSegment: Identifiable, Codable {
         transcription = try container.decodeIfPresent(String.self, forKey: .transcription)
         isExcludedFromExport = try container.decodeIfPresent(Bool.self, forKey: .isExcludedFromExport) ?? false
     }
-    
+
     var duration: TimeInterval {
         endTime - startTime
     }
