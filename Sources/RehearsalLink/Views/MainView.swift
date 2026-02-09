@@ -387,8 +387,12 @@ struct MainView: View {
                     }
                     .disabled(viewModel.isLoading)
 
-                    Button(action: { viewModel.saveProject() }) {
-                        Label("Save", systemImage: "square.and.arrow.down")
+                    Menu {
+                        Button("Normalize & Re-analyze") {
+                            viewModel.normalizeAndReanalyze()
+                        }
+                    } label: {
+                        Label("Tools", systemImage: "wrench.and.screwdriver")
                     }
                     .disabled(viewModel.isLoading || viewModel.audioData == nil)
 

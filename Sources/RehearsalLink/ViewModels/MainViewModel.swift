@@ -28,6 +28,7 @@ class MainViewModel: ObservableObject {
 
     private let audioLoadService = AudioLoadService()
     private let waveformAnalyzer = WaveformAnalyzer()
+    private let audioProcessor = AudioProcessor()
     private let audioPlayerService = AudioPlayerService()
     private let projectService = ProjectService()
     private let exportService = ExportService()
@@ -590,5 +591,53 @@ class MainViewModel: ObservableObject {
 
     func resetZoom() {
         zoomLevel = 1.0
+    }
+
+    func normalizeAndReanalyze() {
+        guard let data = audioData else { return }
+
+        isLoading = true
+        isAnalyzing = true
+        errorMessage = nil
+
+        Task {
+            // より強力なRMS正規化（目標 -20dBFS）を適用
+            guard let normalizedBuffer = audioProcessor.normalizeRMS(buffer: data.pcmBuffer, targetRMSDecibels: -20.0) else {
+                await MainActor.run {
+                    self.errorMessage = "正規化処理に失敗しました。"
+                    self.isLoading = false
+                    self.isAnalyzing = false
+                }
+                return
+            }
+
+            // AudioDataを更新
+            let newData = AudioData(
+                url: data.url,
+                pcmBuffer: normalizedBuffer
+            )
+
+            await MainActor.run {
+                self.audioData = newData
+            }
+
+            // 再解析
+            let analyzer = waveformAnalyzer
+            let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
+                let samples = analyzer.generateWaveformSamples(from: normalizedBuffer, targetSampleCount: 1000)
+                let features = analyzer.extractFeatures(from: normalizedBuffer)
+                let segments = analyzer.calculateSegments(from: features)
+                return (samples, features, segments)
+            }.value
+
+            await MainActor.run {
+                self.waveformSamples = samples
+                self.audioFeatures = features
+                self.segments = segments
+                self.isLoading = false
+                self.isAnalyzing = false
+                print("MainViewModel: Normalization and Re-analysis complete.")
+            }
+        }
     }
 }

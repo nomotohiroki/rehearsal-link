@@ -43,19 +43,30 @@ final class WaveformAnalyzerTests: XCTestCase {
 
     func testCalculateSegments() {
         let features: [AudioFeaturePoint] = [
-            AudioFeaturePoint(time: 0.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0), // Silence
-            AudioFeaturePoint(time: 1.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0),
-            AudioFeaturePoint(time: 2.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10), // Performance
-            AudioFeaturePoint(time: 3.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10),
-            AudioFeaturePoint(time: 4.0, rms: 0.01, lowFrequencyEnergy: 10, highFrequencyEnergy: 1), // Conversation
-            AudioFeaturePoint(time: 5.0, rms: 0.01, lowFrequencyEnergy: 10, highFrequencyEnergy: 1),
-            AudioFeaturePoint(time: 6.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0) // Silence
+            // Silence (0-4s)
+            AudioFeaturePoint(time: 0.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0, spectralCentroid: 0, zeroCrossingRate: 0),
+            AudioFeaturePoint(time: 1.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0, spectralCentroid: 0, zeroCrossingRate: 0),
+            AudioFeaturePoint(time: 2.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0, spectralCentroid: 0, zeroCrossingRate: 0),
+            AudioFeaturePoint(time: 3.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0, spectralCentroid: 0, zeroCrossingRate: 0),
+            AudioFeaturePoint(time: 4.0, rms: 0.0001, lowFrequencyEnergy: 0, highFrequencyEnergy: 0, spectralCentroid: 0, zeroCrossingRate: 0),
+            // Performance (4-8s)
+            AudioFeaturePoint(time: 4.1, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10, spectralCentroid: 6000, zeroCrossingRate: 0.4),
+            AudioFeaturePoint(time: 5.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10, spectralCentroid: 6000, zeroCrossingRate: 0.4),
+            AudioFeaturePoint(time: 6.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10, spectralCentroid: 6000, zeroCrossingRate: 0.4),
+            AudioFeaturePoint(time: 7.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10, spectralCentroid: 6000, zeroCrossingRate: 0.4),
+            AudioFeaturePoint(time: 8.0, rms: 0.1, lowFrequencyEnergy: 1, highFrequencyEnergy: 10, spectralCentroid: 6000, zeroCrossingRate: 0.4),
+            // Conversation (8-12s)
+            AudioFeaturePoint(time: 8.1, rms: 0.02, lowFrequencyEnergy: 10, highFrequencyEnergy: 1, spectralCentroid: 1500, zeroCrossingRate: 0.1),
+            AudioFeaturePoint(time: 9.0, rms: 0.02, lowFrequencyEnergy: 10, highFrequencyEnergy: 1, spectralCentroid: 1500, zeroCrossingRate: 0.1),
+            AudioFeaturePoint(time: 10.0, rms: 0.02, lowFrequencyEnergy: 10, highFrequencyEnergy: 1, spectralCentroid: 1500, zeroCrossingRate: 0.1),
+            AudioFeaturePoint(time: 11.0, rms: 0.02, lowFrequencyEnergy: 10, highFrequencyEnergy: 1, spectralCentroid: 1500, zeroCrossingRate: 0.1),
+            AudioFeaturePoint(time: 12.0, rms: 0.02, lowFrequencyEnergy: 10, highFrequencyEnergy: 1, spectralCentroid: 1500, zeroCrossingRate: 0.1)
         ]
 
         let segments = analyzer.calculateSegments(from: features)
 
         XCTAssertFalse(segments.isEmpty)
-        // Since smoothing is applied, exact count might vary but should be reasonable
-        XCTAssertTrue(segments.count >= 1)
+        // Should have roughly 3 segments (Silence, Performance, Conversation)
+        XCTAssertGreaterThanOrEqual(segments.count, 2)
     }
 }

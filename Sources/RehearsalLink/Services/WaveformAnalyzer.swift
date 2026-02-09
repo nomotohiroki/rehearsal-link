@@ -11,8 +11,10 @@ struct WaveformSample: Identifiable {
 struct AudioFeaturePoint {
     let time: TimeInterval
     let rms: Float
-    let lowFrequencyEnergy: Float // For speech detection (simple)
-    let highFrequencyEnergy: Float
+    let lowFrequencyEnergy: Float // 300Hz - 4kHz (approximate speech range)
+    let highFrequencyEnergy: Float // > 4kHz
+    let spectralCentroid: Float
+    let zeroCrossingRate: Float
 }
 
 struct WaveformAnalyzer: Sendable {
@@ -92,7 +94,7 @@ struct WaveformAnalyzer: Sendable {
         return (localMin, localMax)
     }
 
-    /// 音響特徴量（RMSおよび簡易周波数分析）を抽出します
+    /// 音響特徴量（RMSおよび周波数分析）を抽出します
     func extractFeatures(from buffer: AVAudioPCMBuffer, windowSize: Int = 4096, hopSize: Int = 2048) -> [AudioFeaturePoint] {
         guard buffer.frameLength > 0 else { return [] }
 
@@ -101,8 +103,7 @@ struct WaveformAnalyzer: Sendable {
 
         guard let floatData = buffer.floatChannelData else { return [] }
 
-        // モノラルとして処理するために平均化、あるいは1ch目のみ使用
-        // ここでは1ch目のみを使用して計算を簡略化
+        // モノラルとして処理
         let channelData = floatData[0]
 
         var features: [AudioFeaturePoint] = []
@@ -129,12 +130,19 @@ struct WaveformAnalyzer: Sendable {
                     var rms: Float = 0
                     vDSP_rmsqv(currentPtr, 1, &rms, vDSP_Length(windowSize))
 
-                    // 2. FFT分析 (簡易版)
-                    // 窓関数適用
+                    // 2. Zero Crossing Rate
+                    var zcr: Float = 0
+                    for j in 0 ..< windowSize - 1 {
+                        if (currentPtr[j] < 0 && currentPtr[j + 1] >= 0) || (currentPtr[j] >= 0 && currentPtr[j + 1] < 0) {
+                            zcr += 1
+                        }
+                    }
+                    zcr /= Float(windowSize)
+
+                    // 3. FFT分析
                     var windowedSamples = [Float](repeating: 0, count: windowSize)
                     vDSP_vmul(currentPtr, 1, window, 1, &windowedSamples, 1, vDSP_Length(windowSize))
 
-                    // 実数FFT
                     windowedSamples.withUnsafeBufferPointer { bufferPtr in
                         let complexPtr = UnsafeRawPointer(bufferPtr.baseAddress!).assumingMemoryBound(to: DSPComplex.self)
                         vDSP_ctoz(complexPtr, 2, &output, 1, vDSP_Length(windowSize / 2))
@@ -142,14 +150,29 @@ struct WaveformAnalyzer: Sendable {
 
                     vDSP_fft_zrip(fftSetup!, &output, 1, log2n, FFTDirection(FFT_FORWARD))
 
-                    // パワースペクトル計算
                     var magnitudes = [Float](repeating: 0, count: windowSize / 2)
                     vDSP_zvmags(&output, 1, &magnitudes, 1, vDSP_Length(windowSize / 2))
 
-                    // スペクトルを周波数帯域で分割 (簡易的な会話帯域判定用)
+                    // パワーに変換（振幅の2乗）
+                    var power = [Float](repeating: 0, count: windowSize / 2)
+                    vDSP_vsq(magnitudes, 1, &power, 1, vDSP_Length(windowSize / 2))
+
+                    // スペクトル重心 (Spectral Centroid)
+                    var centroidNumerator: Float = 0
+                    var centroidDenominator: Float = 0
                     let binFreq = Float(sampleRate) / Float(windowSize)
+
+                    for bin in 0 ..< windowSize / 2 {
+                        let freq = Float(bin) * binFreq
+                        let mag = magnitudes[bin]
+                        centroidNumerator += freq * mag
+                        centroidDenominator += mag
+                    }
+                    let spectralCentroid = centroidDenominator > 0 ? centroidNumerator / centroidDenominator : 0
+
+                    // 帯域別エネルギー
                     let speechLowBin = Int(300 / binFreq)
-                    let speechHighBin = Int(3500 / binFreq)
+                    let speechHighBin = Int(4000 / binFreq)
 
                     var lowEnergy: Float = 0
                     var highEnergy: Float = 0
@@ -166,7 +189,9 @@ struct WaveformAnalyzer: Sendable {
                         time: time,
                         rms: rms,
                         lowFrequencyEnergy: lowEnergy,
-                        highFrequencyEnergy: highEnergy
+                        highFrequencyEnergy: highEnergy,
+                        spectralCentroid: spectralCentroid,
+                        zeroCrossingRate: zcr
                     ))
                 }
             }
@@ -179,11 +204,10 @@ struct WaveformAnalyzer: Sendable {
     func calculateSegments(from features: [AudioFeaturePoint]) -> [AudioSegment] {
         guard !features.isEmpty else { return [] }
 
-        // Thresholds adjusted for better sensitivity
-        let silenceThreshold: Float = 0.0015
-        let performanceThreshold: Float = 0.03
+        // 閾値をより敏感に調整 (RMS正規化後の信号を想定)
+        let silenceThreshold: Float = 0.0008 // 約 -62dB
+        let performanceThreshold: Float = 0.015 // 約 -36dB
 
-        // 1. 各ポイントごとの暫定判定
         var rawSegments: [AudioSegment] = []
         var currentType: SegmentType = .silence
         var startTime: TimeInterval = features[0].time
@@ -194,12 +218,15 @@ struct WaveformAnalyzer: Sendable {
             if feature.rms < silenceThreshold {
                 type = .silence
             } else if feature.rms > performanceThreshold {
-                // 音量が大きい場合は演奏の可能性が高い
                 type = .performance
             } else {
-                // 中間の音量。高域エネルギーが相対的に強ければ演奏、そうでなければ会話とする簡易判定
-                // Lowered the ratio threshold to capture more instrumental parts as performance
-                if feature.highFrequencyEnergy > feature.lowFrequencyEnergy * 0.25 {
+                // 中間音量域の判定ロジック
+                let speechRatio = feature.lowFrequencyEnergy / (feature.lowFrequencyEnergy + feature.highFrequencyEnergy + 0.000001)
+
+                // 会話の判定条件を少し緩める
+                if speechRatio > 0.6 && feature.spectralCentroid < 3500 {
+                    type = .conversation
+                } else if feature.spectralCentroid > 4500 || feature.zeroCrossingRate > 0.25 {
                     type = .performance
                 } else {
                     type = .conversation
@@ -216,19 +243,19 @@ struct WaveformAnalyzer: Sendable {
             }
         }
 
-        // 最後のセグメントを追加
         if let lastFeature = features.last {
             rawSegments.append(AudioSegment(startTime: startTime, endTime: lastFeature.time, type: currentType))
         }
 
-        // 2. 平滑化（短すぎる区間の除去と結合）
         return smoothSegments(rawSegments)
     }
 
     private func smoothSegments(_ segments: [AudioSegment]) -> [AudioSegment] {
         guard segments.count > 1 else { return segments }
 
-        let minDuration: TimeInterval = 1.0 // 1秒未満の区間は無視して前後の区間に統合
+        // Phase 12の要件: 5秒以下のセグメントは原則として許容しない（極端な細分化を防ぐ）
+        // ただし、無音区間などは短くても良い場合があるため、調整が必要
+        let minDuration: TimeInterval = 3.0
 
         var smoothed: [AudioSegment] = []
         var current = segments[0]
@@ -236,14 +263,14 @@ struct WaveformAnalyzer: Sendable {
         for i in 1 ..< segments.count {
             let next = segments[i]
 
+            // 短いセグメントを前後の長いセグメントに統合する
             if next.duration < minDuration {
-                // 次の区間が短すぎる場合は現在の区間に吸収させる
+                // 次が短すぎる場合は現在に統合
                 current = AudioSegment(startTime: current.startTime, endTime: next.endTime, type: current.type)
             } else if current.duration < minDuration {
-                // 現在の区間が短すぎる場合は次の区間に吸収させる（開始時間を早める）
+                // 現在が短すぎる場合は次に統合
                 current = AudioSegment(startTime: current.startTime, endTime: next.endTime, type: next.type)
             } else if current.type == next.type {
-                // 同じタイプが続く場合は結合
                 current = AudioSegment(startTime: current.startTime, endTime: next.endTime, type: current.type)
             } else {
                 smoothed.append(current)
