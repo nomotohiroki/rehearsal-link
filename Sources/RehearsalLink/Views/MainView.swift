@@ -5,6 +5,7 @@ struct MainView: View {
     @StateObject private var viewModel = MainViewModel()
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var showInspector = true
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -53,6 +54,11 @@ struct MainView: View {
                         Label("Open Project...", systemImage: "folder.fill")
                     }
                     .disabled(viewModel.isLoading)
+
+                    Button(action: { viewModel.saveProject() }) {
+                        Label("Save Project", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(viewModel.isLoading || viewModel.audioData == nil)
                 }
 
                 Section("Processing") {
@@ -65,6 +71,19 @@ struct MainView: View {
                         Label("Batch Transcribe", systemImage: "waveform.and.mic")
                     }
                     .disabled(viewModel.isLoading || viewModel.audioData == nil || viewModel.isBatchTranscribing)
+
+                    Button(action: {
+                        viewModel.summarizeRehearsalWithAI()
+                    }) {
+                        Label("Generate Summary", systemImage: "sparkles.rectangle.stack")
+                    }
+                    .disabled(viewModel.isLoading || viewModel.audioData == nil || viewModel.isTranscribing)
+
+                    Button(action: {
+                        openSettings()
+                    }) {
+                        Label("AI Settings", systemImage: "brain.head.profile")
+                    }
                 }
                 .symbolRenderingMode(.hierarchical)
 
@@ -134,18 +153,15 @@ struct MainView: View {
             }
         }
         .inspector(isPresented: $showInspector) {
-            if let selectedId = viewModel.selectedSegmentId,
-               let segment = viewModel.segments.first(where: { $0.id == selectedId }) {
-                SegmentInspectorView(viewModel: viewModel, segment: segment)
-                    .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
-            } else {
-                ContentUnavailableView(
-                    "No Selection",
-                    systemImage: "selection.pin.in.out",
-                    description: Text("Select a segment on the waveform to see details.")
-                )
-                .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
+            Group {
+                if let selectedId = viewModel.selectedSegmentId,
+                   let segment = viewModel.segments.first(where: { $0.id == selectedId }) {
+                    SegmentInspectorView(viewModel: viewModel, segment: segment)
+                } else {
+                    ProjectSummaryView(viewModel: viewModel)
+                }
             }
+            .inspectorColumnWidth(min: 300, ideal: 350, max: 500)
         }
         .alert("Project Found", isPresented: $viewModel.showProjectDetectedAlert) {
             Button("Load Project") {

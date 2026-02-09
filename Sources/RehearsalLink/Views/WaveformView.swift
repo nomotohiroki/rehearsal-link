@@ -9,7 +9,7 @@ struct WaveformView: View {
     var playbackPosition: Double = 0 // 0.0 to 1.0
     var color: Color = .blue
     var onSeek: ((Double) -> Void)? = nil
-    var onSelectSegment: ((UUID) -> Void)? = nil
+    var onSelectSegment: ((UUID?) -> Void)? = nil
     var onUpdateSegmentType: ((UUID, SegmentType) -> Void)? = nil
     var onMoveBoundary: ((Int, TimeInterval) -> Void)? = nil
     var onMergeWithNext: ((UUID) -> Void)? = nil
@@ -197,9 +197,7 @@ struct WaveformView: View {
         let hitSegment = segments.first { segment in
             segment.startTime <= time && time < segment.endTime
         }
-        if let hitSegment = hitSegment {
-            onSelectSegment?(hitSegment.id)
-        }
+        onSelectSegment?(hitSegment?.id)
     }
 
     private func segmentColor(for segment: AudioSegment) -> Color {

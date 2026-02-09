@@ -6,7 +6,11 @@ extension MainViewModel {
         guard let audioData = audioData else { return }
         Task {
             do {
-                try await projectService.saveProject(audioFileURL: audioData.url, segments: segments)
+                try await projectService.saveProject(
+                    audioFileURL: audioData.url,
+                    segments: segments,
+                    summary: projectSummary
+                )
             } catch ProjectService.ProjectError.fileSelectionCancelled {
                 // Ignore
             } catch {
@@ -66,5 +70,32 @@ extension MainViewModel {
             }
             isLoading = false
         }
+    }
+
+    func performLoadProject(_ project: RehearsalLinkProject) async throws {
+        isLoading = true
+        errorMessage = nil
+
+        // オーディオファイルの読み込み
+        let data = try await audioLoadService.loadAudio(from: project.audioFileURL)
+        audioData = data
+        isLoading = false
+        isAnalyzing = true
+
+        // セグメント情報と要約をプロジェクトから取得
+        segments = project.segments
+        projectSummary = project.summary
+
+        // プレイヤーにロード
+        audioPlayerService.load(url: data.url)
+
+        // 波形のみバックグラウンドで解析
+        let analyzer = waveformAnalyzer
+        let samples = await Task.detached(priority: .userInitiated) {
+            analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+        }.value
+
+        waveformSamples = samples
+        isAnalyzing = false
     }
 }

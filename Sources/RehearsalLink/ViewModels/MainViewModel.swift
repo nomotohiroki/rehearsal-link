@@ -11,6 +11,7 @@ class MainViewModel: ObservableObject {
     @Published var waveformSamples: [WaveformSample] = []
     @Published var audioFeatures: [AudioFeaturePoint] = []
     @Published var segments: [AudioSegment] = []
+    @Published var projectSummary: String?
     @Published var selectedSegmentId: UUID?
 
     @Published var isPlaying = false
@@ -152,32 +153,6 @@ class MainViewModel: ObservableObject {
         print("MainViewModel: Analysis complete.")
     }
 
-    func performLoadProject(_ project: RehearsalLinkProject) async throws {
-        isLoading = true
-        errorMessage = nil
-
-        // オーディオファイルの読み込み
-        let data = try await audioLoadService.loadAudio(from: project.audioFileURL)
-        audioData = data
-        isLoading = false
-        isAnalyzing = true
-
-        // セグメント情報はプロジェクトから取得（解析を待たずに表示可能）
-        segments = project.segments
-
-        // プレイヤーにロード
-        audioPlayerService.load(url: data.url)
-
-        // 波形のみバックグラウンドで解析
-        let analyzer = waveformAnalyzer
-        let samples = await Task.detached(priority: .userInitiated) {
-            analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-        }.value
-
-        waveformSamples = samples
-        isAnalyzing = false
-    }
-
     func loadDetectedProject() {
         guard let projectURL = pendingProjectURL else { return }
         Task {
@@ -290,5 +265,12 @@ class MainViewModel: ObservableObject {
                 print("MainViewModel: Normalization and Re-analysis complete.")
             }
         }
+    }
+
+    // ユーティリティ: 時間フォーマット (MM:SS)
+    func formatShortTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

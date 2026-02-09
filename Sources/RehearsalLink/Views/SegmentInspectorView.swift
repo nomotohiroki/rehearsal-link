@@ -7,6 +7,22 @@ struct SegmentInspectorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Segment Details")
+                        .font(.headline)
+                    Spacer()
+                    Button(action: {
+                        viewModel.selectedSegmentId = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Return to Rehearsal Summary")
+                }
+                .padding(.bottom, 4)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Type")
                         .font(.system(.caption, weight: .semibold))
@@ -85,13 +101,31 @@ struct SegmentInspectorView: View {
                                 ProgressView()
                                     .controlSize(.small)
                             } else {
-                                Button(action: {
-                                    viewModel.transcribeSegment(id: segment.id)
-                                }) {
-                                    Text("Transcribe")
+                                HStack(spacing: 8) {
+                                    if segment.transcription != nil {
+                                        Menu {
+                                            Button(action: {
+                                                viewModel.normalizeSegmentWithAI(id: segment.id)
+                                            }) {
+                                                Label("Fix Typos (AI)", systemImage: "wand.and.stars")
+                                            }
+                                        } label: {
+                                            Label("AI Actions", systemImage: "sparkles")
+                                                .labelStyle(.iconOnly)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .help("AI-powered text processing")
+                                    }
+
+                                    Button(action: {
+                                        viewModel.transcribeSegment(id: segment.id)
+                                    }) {
+                                        Text(segment.transcription == nil ? "Transcribe" : "Re-transcribe")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
                             }
                         }
 

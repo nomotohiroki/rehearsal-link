@@ -15,12 +15,11 @@ class ProjectService {
         if let type = UTType("com.example.rehearsallink") {
             return type
         }
-        // システムに登録されていない場合、実行時に定義を生成
         return UTType(exportedAs: "com.example.rehearsallink", conformingTo: .json)
     }()
 
     @MainActor
-    func saveProject(audioFileURL: URL, segments: [AudioSegment]) async throws {
+    func saveProject(audioFileURL: URL, segments: [AudioSegment], summary: String? = nil) async throws {
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [projectUTI, .json]
         savePanel.nameFieldStringValue = audioFileURL.deletingPathExtension().lastPathComponent + ".rehearsallink"
@@ -30,7 +29,7 @@ class ProjectService {
             throw ProjectError.fileSelectionCancelled
         }
 
-        let project = RehearsalLinkProject(audioFileURL: audioFileURL, segments: segments)
+        let project = RehearsalLinkProject(audioFileURL: audioFileURL, segments: segments, summary: summary)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
 
