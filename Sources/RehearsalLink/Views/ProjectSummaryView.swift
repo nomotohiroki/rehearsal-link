@@ -6,7 +6,7 @@ struct ProjectSummaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
+            // Header (Fixed at top)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Label("Rehearsal Summary", systemImage: "sparkles.rectangle.stack")
@@ -48,54 +48,50 @@ struct ProjectSummaryView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let summary = viewModel.projectSummary {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text(isEditing ? "Editing Markdown" : "AI Generated Summary")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.secondary)
+            // Content Area (Flexible and Fills available space)
+            Group {
+                if let summary = viewModel.projectSummary {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text(isEditing ? "Editing Markdown" : "AI Generated Summary")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
 
-                                Spacer()
+                            Spacer()
 
-                                Button(action: {
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(summary, forType: .string)
-                                }) {
-                                    Label("Copy", systemImage: "doc.on.doc")
-                                }
-                                .buttonStyle(.link)
-                                .controlSize(.small)
+                            Button(action: {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(summary, forType: .string)
+                            }) {
+                                Label("Copy", systemImage: "doc.on.doc")
                             }
-
-                            if isEditing {
-                                TextEditor(text: Binding(
-                                    get: { viewModel.projectSummary ?? "" },
-                                    set: { viewModel.projectSummary = $0 }
-                                ))
-                                .font(.system(.body, design: .monospaced))
-                                .frame(minHeight: 500)
-                                .padding(8)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(8)
-                            } else {
-                                RichTextView(markdown: summary)
-                                    .frame(minHeight: 600)
-                                    .background(.background)
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                    )
-                            }
+                            .buttonStyle(.link)
+                            .controlSize(.small)
                         }
-                    } else {
-                        emptyState
+                        .padding(.horizontal)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
+
+                        if isEditing {
+                            TextEditor(text: Binding(
+                                get: { viewModel.projectSummary ?? "" },
+                                set: { viewModel.projectSummary = $0 }
+                            ))
+                            .font(.system(.body, design: .monospaced))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity) // Fill space
+                            .padding(8)
+                            .background(.background)
+                        } else {
+                            RichTextView(markdown: summary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity) // Fill space
+                                .background(.background)
+                        }
                     }
+                } else {
+                    emptyState
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding()
             }
         }
     }
@@ -114,6 +110,7 @@ struct ProjectSummaryView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
 
             Button("Generate Summary Now") {
                 viewModel.summarizeRehearsalWithAI()
@@ -121,7 +118,5 @@ struct ProjectSummaryView: View {
             .buttonStyle(.borderedProminent)
             .disabled(viewModel.isTranscribing)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
     }
 }
