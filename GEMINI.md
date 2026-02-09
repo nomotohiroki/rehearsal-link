@@ -19,19 +19,41 @@
 7.  **レビュー**:
     - ユーザー（マネージャー）のレビューを受け、承認を得てから次の**1つのタスク**へ進みます。
     - 1つのフェーズ内の全タスクが完了した際も同様に報告し、次のフェーズへ進む承認を得てください。
-    - リリースが必要な場合は、[5. リリース手順](#5-リリース手順) に従ってリリースを行ってください。
+    - リリースが必要な場合は、[6. リリース手順](#6-リリース手順) に従ってリリースを行ってください。
 
-## 2. コミット・変更ルール
+## 2. システム要件とAPIリファレンス
+本プロジェクトのコア機能が依存するテクノロジーと最新のOS環境は以下の通りです。
+
+### 最新OS環境 (2026年2月時点)
+- **macOS 26 (Tahoe)**: 最新安定版 26.2 (RC 26.3)
+- **iOS 26**: 最新安定版 26.2.1 (RC 26.3)
+
+### コア機能のAPI要件
+- **Speech Transcription & Analysis (Speech.framework)**
+    - **SFSpeechAnalyzer (SpeechAnalyzer)**: **iOS 26.0+ / macOS 26.0+**
+        - 最新の高度な音声解析（セグメンテーション、高精度文字起こし）に使用。
+- **Audio Engine & Editing (AVFoundation.framework)**
+    - 再生、解析、波形生成、セグメント結合、エクスポートに使用。
+    - AVComposition / AVAssetExportSession: iOS 4.0+ / macOS 10.7+
+    - AVAudioEngine (モダンなオーディオ制御): iOS 8.0+ / macOS 10.10+
+
+### Apple 開発者向け資料
+- [Apple Developer Documentation](https://developer.apple.com/documentation/)
+- [Speech Framework Reference](https://developer.apple.com/documentation/speech)
+- [AVFoundation Framework Reference](https://developer.apple.com/documentation/avfoundation)
+- [Human Interface Guidelines (macOS)](https://developer.apple.com/design/human-interface-guidelines/macos)
+
+## 3. コミット・変更ルール
 - コードの変更は、既存のスタイルとアーキテクチャ（MVVM）を尊重してください。
 - ファイルの追加・変更後は、必ずその内容が正しく動作するか（ビルドエラーがないか等）を確認してください。
 
-## 3. ドキュメント管理
+## 4. ドキュメント管理
 - `docs/tasks/` 以下の進捗管理ファイルは、プロジェクトの「真実のソース」として常に最新の状態を保ってください。
 
-## 4. コミュニケーション
+## 5. コミュニケーション
 - ユーザーとの対話は日本語で行ってください。
 
-## 5. リリース手順
+## 6. リリース手順
 フェーズの完了時など、新しいバージョンをリリースする場合は以下の手順で行います。
 1.  **タグの作成**: セマンティックバージョニングに基づき、新しいバージョンタグを作成します（例: `v1.0.8`）。
     - `git tag v1.0.x`

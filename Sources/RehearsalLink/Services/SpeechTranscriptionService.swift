@@ -11,20 +11,6 @@ actor SpeechTranscriptionService {
     }
 
     func transcribe(audioURL: URL, startTime: TimeInterval, endTime: TimeInterval, locale: Locale = .current) async throws -> String {
-        // Check authorization
-        let status = SFSpeechRecognizer.authorizationStatus()
-        if status == .notDetermined {
-            await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { _ in
-                    continuation.resume()
-                }
-            }
-        }
-
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
-            throw TranscriptionError.notAvailable
-        }
-
         // Create a temporary file for the segment to avoid SpeechAnalyzer overhead on large files
         let tempDir = FileManager.default.temporaryDirectory
         let tempFileURL = tempDir.appendingPathComponent(UUID().uuidString + ".m4a")
