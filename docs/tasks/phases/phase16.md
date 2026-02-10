@@ -6,7 +6,7 @@
 ## タスク一覧
 
 ### 1. ドキュメント刷新
-- [ ] **User Guideの全面改訂**
+- [x] **User Guideの全面改訂**
     - **内容**: `docs/user_guide.md` を最新のv1.1.0以降の仕様（NavigationSplitView、Liquid Glass UI、新機能）に合わせて書き直す。
     - **スクリーンショット**: 以下の主要画面のスクリーンショットを撮り直し、差し替える。
         - アプリ概要 (Overview)
