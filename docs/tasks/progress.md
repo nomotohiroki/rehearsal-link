@@ -5,15 +5,6 @@
 
 ## 進行中のフェーズ
 
-### Phase 15: 機能拡張とUI改善 (Feature & UI Refinement)
-- [ ] **ライトモード時の波形視認性向上**
-    - **内容**: 会話・無音・演奏セグメントの配色を見直し、ライトモードでの区別を明確にする。
-- [ ] **演奏セグメントの文字起こし対応**
-    - **内容**: Batch Transcribe等の対象に演奏セグメントを含めるようロジックを変更する。
-- [ ] **エクスポートボタンの表記改善**
-    - **内容**: Performance/Conversationのエクスポートボタンにファイル拡張子(.m4a)を明記する。
-    - 詳細は [phase15.md](./phases/phase15.md) を参照。
-
 ### Phase 16: ドキュメントと品質保証 (Documentation & QA)
 - [ ] **User Guideの全面刷新**
     - **内容**: 最新UIに合わせてガイド記述とスクリーンショットを更新する。
@@ -23,6 +14,7 @@
 
 ## 完了したフェーズ
 
+- **Phase 15**: Feature & UI Refinement
 - **Phase 14**: Apple HIG & Liquid Glass UI Refinement
 - **Phase 13**: AIによるテキスト正規化・要約機能 (AI Text Processing)
 - **Phase 12**: 音声認識精度の向上 (Audio Preprocessing)

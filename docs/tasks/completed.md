@@ -2,6 +2,11 @@
 
 これまでに完了したフェーズの記録です。
 
+## Phase 15: 機能拡張とUI改善 (Feature & UI Refinement)
+- **UIの視認性向上**: ライトモード時の波形配色と不透明度を調整し、セグメントの判別を容易にした。
+- **演奏セグメントの文字起こし対応**: 会話セグメントだけでなく演奏セグメントも文字起こしおよび一括処理の対象に拡大。
+- **UI表記の改善**: エクスポートボタンに拡張子(.m4a)を追記し、出力形式を明確化した。
+
 ## Phase 14: Apple HIG & Liquid Glass UI Refinement
 - **UI/UXの刷新 (Liquid Glass / Modern macOS)**
     - AppleのHIGおよび最新のデザイン原則に基づき、`NavigationSplitView` の採用、Material背景の適用、ツールバーの標準化を実装。

@@ -7,7 +7,7 @@ extension MainViewModel {
               let audioData = audioData else { return }
 
         let segment = segments[index]
-        guard segment.type == .conversation else { return }
+        guard segment.type == .conversation || segment.type == .performance else { return }
 
         isTranscribing = true
         errorMessage = nil
@@ -44,11 +44,11 @@ extension MainViewModel {
         }
     }
 
-    func transcribeAllConversations() {
+    func batchTranscribe() {
         guard let audioData = audioData else { return }
 
-        let conversationSegments = segments.filter { $0.type == .conversation && $0.transcription == nil }
-        guard !conversationSegments.isEmpty else { return }
+        let targetSegments = segments.filter { ($0.type == .conversation || $0.type == .performance) && $0.transcription == nil }
+        guard !targetSegments.isEmpty else { return }
 
         isBatchTranscribing = true
         batchTranscriptionProgress = 0
@@ -56,9 +56,9 @@ extension MainViewModel {
 
         Task {
             var completedCount = 0
-            let totalCount = conversationSegments.count
+            let totalCount = targetSegments.count
 
-            for segment in conversationSegments {
+            for segment in targetSegments {
                 // 連続実行による負荷を軽減するため、各処理の間にわずかな空きを作る
                 await Task.yield()
 

@@ -67,10 +67,9 @@ struct MainView: View {
                     }
                     .disabled(viewModel.isLoading || viewModel.audioData == nil)
 
-                    Button(action: { viewModel.transcribeAllConversations() }) {
+                    Button(action: { viewModel.batchTranscribe() }) {
                         Label("Batch Transcribe", systemImage: "waveform.and.mic")
-                    }
-                    .disabled(viewModel.isLoading || viewModel.audioData == nil || viewModel.isBatchTranscribing)
+                    }.disabled(viewModel.isLoading || viewModel.audioData == nil || viewModel.isBatchTranscribing)
 
                     Button(action: {
                         viewModel.summarizeRehearsalWithAI()
@@ -89,10 +88,10 @@ struct MainView: View {
 
                 Section("Export") {
                     Button(action: { viewModel.exportSegments(type: .performance) }) {
-                        Label("Export Performance", systemImage: "music.note")
+                        Label("Export Performance (.m4a)", systemImage: "music.note")
                     }
                     Button(action: { viewModel.exportSegments(type: .conversation) }) {
-                        Label("Export Conversation", systemImage: "bubble.left.and.bubble.right.fill")
+                        Label("Export Conversation (.m4a)", systemImage: "bubble.left.and.bubble.right.fill")
                     }
                     Button(action: { viewModel.exportAllTranscriptions() }) {
                         Label("Export Text (.txt)", systemImage: "doc.text.fill")

@@ -88,7 +88,7 @@ struct SegmentInspectorView: View {
             Divider()
 
             // Transcription Section (Fills the rest of the window)
-            if segment.type == .conversation {
+            if segment.type == .conversation || segment.type == .performance {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         Label("Transcription", systemImage: "waveform.and.mic")
@@ -155,11 +155,11 @@ struct SegmentInspectorView: View {
                     }
                 }
             } else {
-                // Non-conversation placeholder
+                // Non-transcribable placeholder (Silence)
                 ContentUnavailableView(
                     "Non-Speech Segment",
-                    systemImage: segment.type == .performance ? "music.note" : "zzz",
-                    description: Text("Transcription is only available for conversation segments.")
+                    systemImage: "zzz",
+                    description: Text("Transcription is not available for silence segments.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

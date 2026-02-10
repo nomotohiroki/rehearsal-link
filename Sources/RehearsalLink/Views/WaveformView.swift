@@ -17,6 +17,8 @@ struct WaveformView: View {
     @State private var hoverPosition: Double? = nil
     @State private var isHoveringBoundary: Int? = nil
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
@@ -43,20 +45,29 @@ struct WaveformView: View {
                 // セグメント背景
                 ForEach(segments) { segment in
                     ZStack {
+                        let baseColor = segmentColor(for: segment)
+                        let isSelected = selectedSegmentId == segment.id
+                        let isLight = colorScheme == .light
+
                         // Liquid Glass style segment background with gradient
+                        // ライトモードでは不透明度を大幅に上げる (0.6 ~ 0.3 程度)
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        segmentColor(for: segment)
-                                            .opacity(selectedSegmentId == segment.id ? 0.5 : 0.3),
-                                        segmentColor(for: segment)
-                                            .opacity(selectedSegmentId == segment.id ? 0.3 : 0.1)
+                                        baseColor.opacity(isLight ? (isSelected ? 0.6 : 0.4) : (isSelected ? 0.5 : 0.3)),
+                                        baseColor.opacity(isLight ? (isSelected ? 0.4 : 0.2) : (isSelected ? 0.3 : 0.1))
                                     ]),
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
+
+                        // ライトモードでの境界視認性を高めるための枠線（より太く、濃く）
+                        if isLight {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(baseColor.opacity(isSelected ? 0.8 : 0.5), lineWidth: isSelected ? 2 : 1)
+                        }
 
                         if selectedSegmentId == segment.id {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -202,19 +213,19 @@ struct WaveformView: View {
 
     private func segmentColor(for segment: AudioSegment) -> Color {
         if segment.isExcludedFromExport {
-            return Color.gray.opacity(0.3)
+            return Color.gray
         }
 
         switch segment.type {
         case .performance:
-            return Color.blue.opacity(0.2)
+            return Color.blue
         case .conversation:
             if segment.transcription != nil {
-                return Color.purple.opacity(0.3)
+                return Color.purple
             }
-            return Color.green.opacity(0.2)
+            return Color.green
         case .silence:
-            return Color.gray.opacity(0.1)
+            return Color.gray
         }
     }
 }
