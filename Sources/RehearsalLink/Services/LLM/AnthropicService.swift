@@ -27,28 +27,12 @@ struct AnthropicService: LLMServiceProtocol {
             maxTokens: request.maxTokens ?? 4096,
             temperature: request.temperature
         )
-        let jsonData = try JSONEncoder().encode(body)
-        urlRequest.httpBody = jsonData
-
-        print("--- Anthropic Request ---")
-        print("URL: \(url)")
-        print("Model: \(request.model.id)")
-        print("System Prompt: \(request.systemPrompt ?? "none")")
-        print("User Prompt: \(request.prompt)")
-        if let bodyString = String(data: jsonData, encoding: .utf8) {
-            print("Body: \(bodyString)")
-        }
+        urlRequest.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await session.data(for: urlRequest)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("Anthropic Error: Invalid response type")
             throw LLMError.unknownError("Invalid response")
-        }
-
-        print("--- Anthropic Response (\(httpResponse.statusCode)) ---")
-        if let responseString = String(data: data, encoding: .utf8) {
-            print("Data: \(responseString)")
         }
 
         if httpResponse.statusCode != 200 {

@@ -163,6 +163,14 @@ struct MainView: View {
             }
             .inspectorColumnWidth(min: 300, ideal: 350, max: 500)
         }
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "An unknown error occurred.")
+        }
         .alert("Project Found", isPresented: $viewModel.showProjectDetectedAlert) {
             Button("Load Project") {
                 viewModel.loadDetectedProject()

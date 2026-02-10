@@ -42,6 +42,19 @@ struct ProjectSummaryView: View {
                 Text("Overall summary of the rehearsal session.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if let error = viewModel.errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text(error)
+                            .font(.caption)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.1))
+                    .foregroundColor(.red)
+                    .cornerRadius(6)
+                }
             }
             .padding()
             .background(.ultraThinMaterial)

@@ -73,6 +73,18 @@ struct SegmentInspectorView: View {
             .padding()
             .background(.ultraThinMaterial)
 
+            if let error = viewModel.errorMessage {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(error)
+                        .font(.caption)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.1))
+                .foregroundColor(.red)
+            }
+
             Divider()
 
             // Transcription Section (Fills the rest of the window)
