@@ -15,13 +15,42 @@ class LLMConfigurationService: ObservableObject {
     }
 
     func getAPIKey(for provider: LLMProvider) -> String {
-        let key = UserDefaults.standard.string(forKey: "llm_api_key_\(provider.rawValue)") ?? ""
-        return key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let account = "llm_api_key_\(provider.rawValue)"
+        let service = "com.rehearsallink.api-keys"
+
+        // Keychainから取得を試みる
+        if let key = KeychainHelper.shared.read(service: service, account: account) {
+            return key.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // UserDefaultsからの移行パス
+        let key = UserDefaults.standard.string(forKey: account) ?? ""
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedKey.isEmpty {
+            // Keychainに保存
+            KeychainHelper.shared.save(trimmedKey, service: service, account: account)
+            // UserDefaultsから削除
+            UserDefaults.standard.removeObject(forKey: account)
+        }
+
+        return trimmedKey
     }
 
     func setAPIKey(_ key: String, for provider: LLMProvider) {
         let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserDefaults.standard.set(trimmedKey, forKey: "llm_api_key_\(provider.rawValue)")
+        let account = "llm_api_key_\(provider.rawValue)"
+        let service = "com.rehearsallink.api-keys"
+
+        if trimmedKey.isEmpty {
+            KeychainHelper.shared.delete(service: service, account: account)
+        } else {
+            KeychainHelper.shared.save(trimmedKey, service: service, account: account)
+        }
+
+        // UserDefaultsに存在する場合は削除（セキュリティ向上のため）
+        UserDefaults.standard.removeObject(forKey: account)
+
         objectWillChange.send()
     }
 
