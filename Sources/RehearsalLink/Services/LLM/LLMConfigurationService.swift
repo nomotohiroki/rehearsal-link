@@ -19,10 +19,9 @@ class LLMConfigurationService: ObservableObject {
         let service = "com.rehearsallink.api-keys"
 
         // Keychainから取得を試みる
-        if let key = KeychainHelper.shared.read(service: service, account: account) {
+        if let key = KeychainHelper.shared.readString(service: service, account: account) {
             return key.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-
         // UserDefaultsからの移行パス
         let key = UserDefaults.standard.string(forKey: account) ?? ""
         let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)

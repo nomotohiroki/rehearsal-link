@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Keychainへのアクセスを抽象化するヘルパークラス
-class KeychainHelper {
+final class KeychainHelper: @unchecked Sendable {
     static let shared = KeychainHelper()
     private init() {}
 
@@ -32,7 +32,7 @@ class KeychainHelper {
     }
 
     /// Keychainからデータを読み取ります
-    func read(service: String, account: String) -> Data? {
+    func readData(service: String, account: String) -> Data? {
         let query = [
             kSecAttrService: service,
             kSecAttrAccount: account,
@@ -66,8 +66,8 @@ extension KeychainHelper {
     }
 
     /// Keychainから文字列を読み取ります
-    func read(service: String, account: String) -> String? {
-        guard let data = read(service: service, account: account) else { return nil }
+    func readString(service: String, account: String) -> String? {
+        guard let data = readData(service: service, account: account) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
