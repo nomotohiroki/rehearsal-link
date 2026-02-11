@@ -62,4 +62,21 @@ class LLMConfigurationService: ObservableObject {
         let id = getModelID(for: provider)
         return LLMModel(id: id, name: id, provider: provider, contextWindow: 128_000)
     }
+
+    func getSystemPrompt(for task: LLMTask) -> String {
+        let key = "llm_system_prompt_\(task.rawValue)"
+        return UserDefaults.standard.string(forKey: key) ?? task.defaultSystemPrompt
+    }
+
+    func setSystemPrompt(_ prompt: String, for task: LLMTask) {
+        let key = "llm_system_prompt_\(task.rawValue)"
+        UserDefaults.standard.set(prompt, forKey: key)
+        objectWillChange.send()
+    }
+
+    func resetSystemPrompt(for task: LLMTask) {
+        let key = "llm_system_prompt_\(task.rawValue)"
+        UserDefaults.standard.removeObject(forKey: key)
+        objectWillChange.send()
+    }
 }

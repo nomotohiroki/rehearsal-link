@@ -14,7 +14,7 @@ struct LLMTextProcessor {
         let model = config.getSelectedModel()
         let request = LLMRequest(
             prompt: text,
-            systemPrompt: task.systemPrompt,
+            systemPrompt: config.getSystemPrompt(for: task),
             model: model,
             temperature: task == .summarize ? 0.3 : 0.1 // 要約は少し柔軟に、正規化は忠実に
         )

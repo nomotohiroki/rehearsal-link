@@ -9,7 +9,7 @@ enum LLMTask: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    var systemPrompt: String {
+    var defaultSystemPrompt: String {
         switch self {
         case .normalize:
             return """

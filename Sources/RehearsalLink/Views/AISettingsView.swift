@@ -4,6 +4,7 @@ struct AISettingsView: View {
     @ObservedObject private var config = LLMConfigurationService.shared
     @State private var apiKeys: [LLMProvider: String] = [:]
     @State private var modelIDs: [LLMProvider: String] = [:]
+    @State private var systemPrompts: [LLMTask: String] = [:]
 
     var body: some View {
         TabView {
@@ -11,8 +12,13 @@ struct AISettingsView: View {
                 .tabItem {
                     Label("AI Services", systemImage: "brain.head.profile")
                 }
+
+            promptSettingsTab
+                .tabItem {
+                    Label("System Prompts", systemImage: "doc.text.magnifyingglass")
+                }
         }
-        .frame(width: 500, height: 520)
+        .frame(width: 600, height: 720)
         .onAppear {
             loadSettings()
         }
@@ -53,8 +59,8 @@ struct AISettingsView: View {
             Section {
                 HStack {
                     Spacer()
-                    Button("Save All Settings") {
-                        saveSettings()
+                    Button("Save AI Settings") {
+                        saveAISettings()
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -67,8 +73,62 @@ struct AISettingsView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .formStyle(.columns) // macOS標準の「左ラベル・右コントロール」形式
-        .padding(24) // コンテンツ周囲に適切な余白を確保
+        .formStyle(.columns)
+        .padding(24)
+    }
+
+    private var promptSettingsTab: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    ForEach(LLMTask.allCases) { task in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(task.rawValue)
+                                    .font(.headline)
+                                Spacer()
+                                Button("Reset to Default") {
+                                    systemPrompts[task] = task.defaultSystemPrompt
+                                }
+                                .buttonStyle(.link)
+                                .font(.caption)
+                            }
+
+                            TextEditor(text: Binding(
+                                get: { systemPrompts[task] ?? "" },
+                                set: { systemPrompts[task] = $0 }
+                            ))
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 220)
+                            .scrollContentBackground(.hidden)
+                            .padding(4)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+                .padding(24)
+            }
+
+            Divider()
+
+            HStack {
+                Text("These prompts define how the AI behaves.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Save Prompts") {
+                    savePromptSettings()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(16)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
     }
 
     private func loadSettings() {
@@ -76,9 +136,12 @@ struct AISettingsView: View {
             apiKeys[provider] = config.getAPIKey(for: provider)
             modelIDs[provider] = config.getModelID(for: provider)
         }
+        for task in LLMTask.allCases {
+            systemPrompts[task] = config.getSystemPrompt(for: task)
+        }
     }
 
-    private func saveSettings() {
+    private func saveAISettings() {
         for provider in LLMProvider.allCases {
             if let key = apiKeys[provider] {
                 config.setAPIKey(key, for: provider)
@@ -89,11 +152,11 @@ struct AISettingsView: View {
         }
     }
 
-    private func defaultSuggestion(for provider: LLMProvider) -> String {
-        switch provider {
-        case .openai: return "gpt-4o-mini"
-        case .anthropic: return "claude-3-5-sonnet-latest"
-        case .gemini: return "gemini-2.0-flash-exp"
+    private func savePromptSettings() {
+        for task in LLMTask.allCases {
+            if let prompt = systemPrompts[task] {
+                config.setSystemPrompt(prompt, for: task)
+            }
         }
     }
 }
