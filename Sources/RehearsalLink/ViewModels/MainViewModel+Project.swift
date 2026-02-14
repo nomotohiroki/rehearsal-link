@@ -87,15 +87,26 @@ extension MainViewModel {
         projectSummary = project.summary
 
         // プレイヤーにロード
-        audioPlayerService.load(url: data.url)
+        try audioPlayerService.load(data: data)
 
         // 波形のみバックグラウンドで解析
         let analyzer = waveformAnalyzer
-        let samples = await Task.detached(priority: .userInitiated) {
-            analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
+        let result: Result<[WaveformSample], Error> = await Task.detached(priority: .userInitiated) {
+            do {
+                let samples = try analyzer.generateWaveformSamples(from: data.audioFile, targetSampleCount: 1000)
+                return .success(samples)
+            } catch {
+                return .failure(error)
+            }
         }.value
 
-        waveformSamples = samples
+        switch result {
+        case .success(let samples):
+            self.waveformSamples = samples
+        case .failure(let error):
+            self.errorMessage = "波形データの生成に失敗しました: \(error.localizedDescription)"
+        }
+        
         isAnalyzing = false
     }
 }

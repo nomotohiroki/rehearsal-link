@@ -7,14 +7,16 @@ struct AudioData: @unchecked Sendable {
     let duration: TimeInterval
     let sampleRate: Double
     let channelCount: AVAudioChannelCount
-    let pcmBuffer: AVAudioPCMBuffer
+    let audioFile: AVAudioFile
 
-    init(url: URL, pcmBuffer: AVAudioPCMBuffer) {
+    init(url: URL, audioFile: AVAudioFile) {
         self.url = url
-        fileName = url.lastPathComponent
-        self.pcmBuffer = pcmBuffer
-        sampleRate = pcmBuffer.format.sampleRate
-        channelCount = pcmBuffer.format.channelCount
-        duration = Double(pcmBuffer.frameLength) / pcmBuffer.format.sampleRate
+        self.fileName = url.lastPathComponent
+        self.audioFile = audioFile
+
+        let format = audioFile.processingFormat
+        self.sampleRate = format.sampleRate
+        self.channelCount = format.channelCount
+        self.duration = Double(audioFile.length) / format.sampleRate
     }
 }
