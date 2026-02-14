@@ -14,8 +14,12 @@ extension MainViewModel {
 
         Task {
             do {
-                let text = try await transcriptionService.transcribe(
-                    audioURL: audioData.url,
+                guard let service = transcriptionService else {
+                    throw URLError(.unknown) // Or a more specific error
+                }
+                
+                let text = try await service.transcribe(
+                    audioFile: audioData.audioFile,
                     startTime: segment.startTime,
                     endTime: segment.endTime
                 )
@@ -45,7 +49,7 @@ extension MainViewModel {
     }
 
     func batchTranscribe() {
-        guard let audioData = audioData else { return }
+        guard let audioData = audioData, let service = transcriptionService else { return }
 
         let targetSegments = segments.filter { ($0.type == .conversation || $0.type == .performance) && $0.transcription == nil }
         guard !targetSegments.isEmpty else { return }
@@ -63,8 +67,8 @@ extension MainViewModel {
                 await Task.yield()
 
                 do {
-                    let text = try await transcriptionService.transcribe(
-                        audioURL: audioData.url,
+                    let text = try await service.transcribe(
+                        audioFile: audioData.audioFile,
                         startTime: segment.startTime,
                         endTime: segment.endTime
                     )

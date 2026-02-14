@@ -95,16 +95,14 @@ struct WaveformAnalyzer: Sendable {
     }
 
     /// 音響特徴量（RMSおよび周波数分析）を抽出します
-    func extractFeatures(from buffer: AVAudioPCMBuffer, windowSize: Int = 4096, hopSize: Int = 2048) -> [AudioFeaturePoint] {
-        guard buffer.frameLength > 0 else { return [] }
+    /// AVAudioFileからストリーミングで音響特徴量を抽出します
+    func extractFeatures(from audioFile: AVAudioFile, windowSize: Int = 4096, hopSize: Int = 2048) throws -> [AudioFeaturePoint] {
+        print("WaveformAnalyzer: Starting streaming feature extraction.")
+        guard audioFile.length > 0 else { return [] }
 
-        let frameLength = Int(buffer.frameLength)
-        let sampleRate = buffer.format.sampleRate
-
-        guard let floatData = buffer.floatChannelData else { return [] }
-
-        // モノラルとして処理
-        let channelData = floatData[0]
+        let fileFormat = audioFile.processingFormat
+        let sampleRate = fileFormat.sampleRate
+        let fileLength = audioFile.length
 
         var features: [AudioFeaturePoint] = []
 
@@ -112,92 +110,85 @@ struct WaveformAnalyzer: Sendable {
         let log2n = UInt(round(log2(Double(windowSize))))
         let fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
         defer { vDSP_destroy_fftsetup(fftSetup) }
-
         var window = [Float](repeating: 0, count: windowSize)
         vDSP_hann_window(&window, vDSP_Length(windowSize), Int32(vDSP_HANN_NORM))
-
         var realp = [Float](repeating: 0, count: windowSize / 2)
         var imagp = [Float](repeating: 0, count: windowSize / 2)
 
-        realp.withUnsafeMutableBufferPointer { realPtr in
-            imagp.withUnsafeMutableBufferPointer { imagPtr in
-                var output = DSPSplitComplex(realp: realPtr.baseAddress!, imagp: imagPtr.baseAddress!)
+        // 読み込み用バッファ
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: fileFormat, frameCapacity: AVAudioFrameCount(windowSize)) else { return [] }
 
-                for startFrame in stride(from: 0, to: frameLength - windowSize, by: hopSize) {
-                    let currentPtr = channelData.advanced(by: startFrame)
+        audioFile.framePosition = 0
+        for startFrame in stride(from: 0, to: fileLength, by: hopSize) {
+            // ファイルから直接windowSize分だけ読み込む
+            audioFile.framePosition = startFrame
+            try audioFile.read(into: buffer)
+            
+            if buffer.frameLength < windowSize { break } // 末尾の不完全なデータは無視
+            guard let channelData = buffer.floatChannelData?[0] else { continue }
+            let currentPtr = channelData
 
-                    // 1. RMS計算
+            // --- ここから下の計算ロジックは既存の_extractFeaturesとほぼ同じ ---
+            
+            realp.withUnsafeMutableBufferPointer { realPtr in
+                imagp.withUnsafeMutableBufferPointer { imagPtr in
+                    var output = DSPSplitComplex(realp: realPtr.baseAddress!, imagp: imagPtr.baseAddress!)
+
+                    // (計算処理)
                     var rms: Float = 0
                     vDSP_rmsqv(currentPtr, 1, &rms, vDSP_Length(windowSize))
 
-                    // 2. Zero Crossing Rate
                     var zcr: Float = 0
                     for j in 0 ..< windowSize - 1 {
-                        if (currentPtr[j] < 0 && currentPtr[j + 1] >= 0) || (currentPtr[j] >= 0 && currentPtr[j + 1] < 0) {
-                            zcr += 1
-                        }
+                        if (currentPtr[j] < 0 && currentPtr[j + 1] >= 0) || (currentPtr[j] >= 0 && currentPtr[j + 1] < 0) { zcr += 1 }
                     }
                     zcr /= Float(windowSize)
 
-                    // 3. FFT分析
                     var windowedSamples = [Float](repeating: 0, count: windowSize)
                     vDSP_vmul(currentPtr, 1, window, 1, &windowedSamples, 1, vDSP_Length(windowSize))
-
                     windowedSamples.withUnsafeBufferPointer { bufferPtr in
                         let complexPtr = UnsafeRawPointer(bufferPtr.baseAddress!).assumingMemoryBound(to: DSPComplex.self)
                         vDSP_ctoz(complexPtr, 2, &output, 1, vDSP_Length(windowSize / 2))
                     }
-
                     vDSP_fft_zrip(fftSetup!, &output, 1, log2n, FFTDirection(FFT_FORWARD))
 
                     var magnitudes = [Float](repeating: 0, count: windowSize / 2)
                     vDSP_zvmags(&output, 1, &magnitudes, 1, vDSP_Length(windowSize / 2))
 
-                    // パワーに変換（振幅の2乗）
-                    var power = [Float](repeating: 0, count: windowSize / 2)
-                    vDSP_vsq(magnitudes, 1, &power, 1, vDSP_Length(windowSize / 2))
-
-                    // スペクトル重心 (Spectral Centroid)
-                    var centroidNumerator: Float = 0
-                    var centroidDenominator: Float = 0
-                    let binFreq = Float(sampleRate) / Float(windowSize)
-
-                    for bin in 0 ..< windowSize / 2 {
-                        let freq = Float(bin) * binFreq
-                        let mag = magnitudes[bin]
-                        centroidNumerator += freq * mag
-                        centroidDenominator += mag
-                    }
-                    let spectralCentroid = centroidDenominator > 0 ? centroidNumerator / centroidDenominator : 0
-
-                    // 帯域別エネルギー
-                    let speechLowBin = Int(300 / binFreq)
-                    let speechHighBin = Int(4000 / binFreq)
-
-                    var lowEnergy: Float = 0
-                    var highEnergy: Float = 0
-
-                    if speechHighBin < magnitudes.count {
-                        magnitudes.withUnsafeBufferPointer { magPtr in
-                            vDSP_sve(magPtr.baseAddress!.advanced(by: speechLowBin), 1, &lowEnergy, vDSP_Length(speechHighBin - speechLowBin))
-                            vDSP_sve(magPtr.baseAddress!.advanced(by: speechHighBin), 1, &highEnergy, vDSP_Length(magnitudes.count - speechHighBin))
-                        }
-                    }
+                    let (spectralCentroid, lowEnergy, highEnergy) = calculateSpectralFeatures(magnitudes: &magnitudes, sampleRate: sampleRate, windowSize: windowSize)
 
                     let time = Double(startFrame) / sampleRate
-                    features.append(AudioFeaturePoint(
-                        time: time,
-                        rms: rms,
-                        lowFrequencyEnergy: lowEnergy,
-                        highFrequencyEnergy: highEnergy,
-                        spectralCentroid: spectralCentroid,
-                        zeroCrossingRate: zcr
-                    ))
+                    features.append(AudioFeaturePoint(time: time, rms: rms, lowFrequencyEnergy: lowEnergy, highFrequencyEnergy: highEnergy, spectralCentroid: spectralCentroid, zeroCrossingRate: zcr))
                 }
             }
         }
 
+        print("WaveformAnalyzer: Finished streaming extraction. Generated \(features.count) points.")
         return features
+    }
+    
+    private func calculateSpectralFeatures(magnitudes: inout [Float], sampleRate: Double, windowSize: Int) -> (spectralCentroid: Float, lowEnergy: Float, highEnergy: Float) {
+        let binFreq = Float(sampleRate) / Float(windowSize)
+        var centroidNumerator: Float = 0
+        var centroidDenominator: Float = 0
+        for bin in 0 ..< windowSize / 2 {
+            let freq = Float(bin) * binFreq
+            let mag = magnitudes[bin]
+            centroidNumerator += freq * mag
+            centroidDenominator += mag
+        }
+        let spectralCentroid = centroidDenominator > 0 ? centroidNumerator / centroidDenominator : 0
+        let speechLowBin = Int(300 / binFreq)
+        let speechHighBin = Int(4000 / binFreq)
+        var lowEnergy: Float = 0
+        var highEnergy: Float = 0
+        if speechHighBin < magnitudes.count {
+            magnitudes.withUnsafeBufferPointer { magPtr in
+                vDSP_sve(magPtr.baseAddress!.advanced(by: speechLowBin), 1, &lowEnergy, vDSP_Length(speechHighBin - speechLowBin))
+                vDSP_sve(magPtr.baseAddress!.advanced(by: speechHighBin), 1, &highEnergy, vDSP_Length(magnitudes.count - speechHighBin))
+            }
+        }
+        return (spectralCentroid, lowEnergy, highEnergy)
     }
 
     /// 抽出された特徴量からセグメント（演奏・会話・無音）を判定します
@@ -250,6 +241,8 @@ struct WaveformAnalyzer: Sendable {
         return smoothSegments(rawSegments)
     }
 
+
+
     private func smoothSegments(_ segments: [AudioSegment]) -> [AudioSegment] {
         guard segments.count > 1 else { return segments }
 
@@ -280,5 +273,95 @@ struct WaveformAnalyzer: Sendable {
         smoothed.append(current)
 
         return smoothed
+    }
+
+    /// AVAudioFileからストリーミングで波形データを抽出します
+    func generateWaveformSamples(from audioFile: AVAudioFile, targetSampleCount: Int) throws -> [WaveformSample] {
+        print("WaveformAnalyzer: Starting streaming analysis. File Length: \(audioFile.length), Channels: \(audioFile.processingFormat.channelCount)")
+
+        guard targetSampleCount > 0, audioFile.length > 0 else { return [] }
+
+        let fileLength = audioFile.length
+        let fileFormat = audioFile.processingFormat
+        let channelCount = Int(fileFormat.channelCount)
+
+        guard channelCount > 0 else { return [] }
+
+        let samplesPerPixel = max(1, Int(fileLength) / targetSampleCount)
+        var samples: [WaveformSample] = []
+        samples.reserveCapacity(targetSampleCount)
+
+        // 読み込み用のバッファを設定 (e.g., 8192フレーム)
+        let bufferSize = AVAudioFrameCount(8192)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: fileFormat, frameCapacity: bufferSize) else {
+            // メモリ確保に失敗
+            print("WaveformAnalyzer: Failed to allocate buffer for streaming.")
+            return []
+        }
+
+        var currentPixel = 0
+        var pixelMin: Float = 0.0
+        var pixelMax: Float = 0.0
+        var isFirstSampleInPixel = true
+
+        // ファイルの先頭に戻す
+        audioFile.framePosition = 0
+
+        while audioFile.framePosition < fileLength {
+            try audioFile.read(into: buffer)
+
+            guard let floatData = buffer.floatChannelData, buffer.frameLength > 0 else {
+                continue
+            }
+            
+            let framesRead = Int(buffer.frameLength)
+            let channelPointers = UnsafeBufferPointer(start: floatData, count: channelCount)
+
+            for frame in 0..<framesRead {
+                let fileFramePosition = Int(audioFile.framePosition) - framesRead + frame
+                
+                if fileFramePosition / samplesPerPixel != currentPixel {
+                    if !isFirstSampleInPixel {
+                        samples.append(WaveformSample(min: pixelMin, max: pixelMax))
+                    }
+                    if samples.count >= targetSampleCount { break }
+                    currentPixel = fileFramePosition / samplesPerPixel
+                    isFirstSampleInPixel = true
+                }
+
+                var frameMin: Float = 0.0
+                var frameMax: Float = 0.0
+                var isFirstChannel = true
+
+                for channel in 0..<channelCount {
+                    let value = channelPointers[channel][frame]
+                    if isFirstChannel {
+                        frameMin = value
+                        frameMax = value
+                        isFirstChannel = false
+                    } else {
+                        frameMin = min(frameMin, value)
+                        frameMax = max(frameMax, value)
+                    }
+                }
+                
+                if isFirstSampleInPixel {
+                    pixelMin = frameMin
+                    pixelMax = frameMax
+                    isFirstSampleInPixel = false
+                } else {
+                    pixelMin = min(pixelMin, frameMin)
+                    pixelMax = max(pixelMax, frameMax)
+                }
+            }
+            if samples.count >= targetSampleCount { break }
+        }
+        
+        if !isFirstSampleInPixel && samples.count < targetSampleCount {
+            samples.append(WaveformSample(min: pixelMin, max: pixelMax))
+        }
+
+        print("WaveformAnalyzer: Finished streaming. Generated \(samples.count) samples.")
+        return samples
     }
 }

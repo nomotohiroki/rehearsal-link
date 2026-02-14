@@ -35,28 +35,8 @@ struct AudioLoadService: Sendable {
         return try await Task.detached(priority: .userInitiated) {
             print("AudioLoadService: Loading file from \(url.lastPathComponent)")
             do {
-                let file = try AVAudioFile(forReading: url)
-
-                // 標準的なフォーマット（Float32, 非インターリーブ）を指定
-                guard let format = AVAudioFormat(standardFormatWithSampleRate: file.fileFormat.sampleRate,
-                                                 channels: file.fileFormat.channelCount)
-                else {
-                    throw AudioLoadError.invalidFormat
-                }
-
-                print("AudioLoadService: Standardized Format: \(format)")
-
-                let frameCount = AVAudioFrameCount(file.length)
-                print("AudioLoadService: File Length (frames): \(frameCount)")
-
-                guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-                    throw AudioLoadError.invalidFormat
-                }
-
-                try file.read(into: buffer)
-                print("AudioLoadService: Read complete. Buffer frameLength: \(buffer.frameLength)")
-
-                return AudioData(url: url, pcmBuffer: buffer)
+                let audioFile = try AVAudioFile(forReading: url)
+                return AudioData(url: url, audioFile: audioFile)
             } catch {
                 print("AudioLoadService: Failed to load. Error: \(error)")
                 throw AudioLoadError.failedToLoadFile(error)

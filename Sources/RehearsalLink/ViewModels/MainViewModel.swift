@@ -1,6 +1,8 @@
 import Combine
 import Foundation
 import SwiftUI
+import AVFoundation
+import Accelerate
 
 @MainActor
 class MainViewModel: ObservableObject {
@@ -33,7 +35,7 @@ class MainViewModel: ObservableObject {
     let audioPlayerService = AudioPlayerService()
     let projectService = ProjectService()
     let exportService = ExportService()
-    let transcriptionService = SpeechTranscriptionService()
+    var transcriptionService: SpeechTranscriptionService?
 
     var cancellables = Set<AnyCancellable>()
 
@@ -50,8 +52,7 @@ class MainViewModel: ObservableObject {
         // ループ設定の同期
         $isLoopingEnabled
             .receive(on: RunLoop.main)
-            .sink { [weak self] enabled in
-                self?.audioPlayerService.isLooping = enabled
+            .sink { [weak self] _ in
                 self?.updateLoopRange()
             }
             .store(in: &cancellables)
@@ -69,15 +70,24 @@ class MainViewModel: ObservableObject {
                 self?.updateLoopRange()
             }
             .store(in: &cancellables)
+        
+        // SpeechTranscriptionServiceの初期化
+        do {
+            transcriptionService = try SpeechTranscriptionService()
+        } catch {
+            self.errorMessage = "文字起こしサービスの初期化に失敗しました。アプリを再起動してください。"
+            print("Failed to initialize SpeechTranscriptionService: \(error)")
+        }
     }
 
     private func updateLoopRange() {
-        if isLoopingEnabled, let selectedId = selectedSegmentId,
+        if let selectedId = selectedSegmentId,
            let segment = segments.first(where: { $0.id == selectedId }) {
             audioPlayerService.loopRange = segment.startTime ... segment.endTime
         } else {
             audioPlayerService.loopRange = nil
         }
+        audioPlayerService.isLooping = isLoopingEnabled
     }
 
     func selectFile() {
@@ -134,22 +144,32 @@ class MainViewModel: ObservableObject {
         print("MainViewModel: AudioData set. Duration: \(data.duration)")
 
         // プレイヤーにロード
-        audioPlayerService.load(url: data.url)
+        try audioPlayerService.load(data: data)
 
         // 重い解析処理をバックグラウンドで行う
         let analyzer = waveformAnalyzer
-        let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
-            let samples = analyzer.generateWaveformSamples(from: data.pcmBuffer, targetSampleCount: 1000)
-            let features = analyzer.extractFeatures(from: data.pcmBuffer)
-            let segments = analyzer.calculateSegments(from: features)
-            return (samples, features, segments)
+        let result: Result<(samples: [WaveformSample], features: [AudioFeaturePoint], segments: [AudioSegment]), Error> = await Task.detached(priority: .userInitiated) {
+            do {
+                let samples = try analyzer.generateWaveformSamples(from: data.audioFile, targetSampleCount: 1000)
+                let features = try analyzer.extractFeatures(from: data.audioFile)
+                let segments = analyzer.calculateSegments(from: features)
+                return .success((samples, features, segments))
+            } catch {
+                print("MainViewModel: Analysis failed with error: \(error)")
+                return .failure(error)
+            }
         }.value
 
-        waveformSamples = samples
-        audioFeatures = features
-        self.segments = segments
-        isAnalyzing = false
+        switch result {
+        case let .success((samples, features, segments)):
+            self.waveformSamples = samples
+            self.audioFeatures = features
+            self.segments = segments
+        case let .failure(error):
+            self.errorMessage = "音声ファイルの解析に失敗しました: \(error.localizedDescription)"
+        }
 
+        isAnalyzing = false
         print("MainViewModel: Analysis complete.")
     }
 
@@ -220,49 +240,76 @@ class MainViewModel: ObservableObject {
     }
 
     func normalizeAndReanalyze() {
-        guard let data = audioData else { return }
+        guard let audioData = audioData else { return }
 
-        isLoading = true
-        isAnalyzing = true
-        errorMessage = nil
+        self.isLoading = true
+        self.isAnalyzing = true
+        self.errorMessage = nil
 
-        Task {
-            // より強力なRMS正規化（目標 -20dBFS）を適用
-            guard let normalizedBuffer = audioProcessor.normalizeRMS(buffer: data.pcmBuffer, targetRMSDecibels: -20.0) else {
+        Task.detached(priority: .userInitiated) {
+            let inputFile = audioData.audioFile
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
+
+            do {
+                // --- Pass 1: Calculate overall RMS to determine gain ---
+                var sumOfSquares: Double = 0
+                let frameLength = inputFile.length
+                let format = inputFile.processingFormat
+                let channelCount = format.channelCount
+                
+                inputFile.framePosition = 0
+                let bufferSize = AVAudioFrameCount(4096)
+                guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: bufferSize) else {
+                    throw URLError(.cannotCreateFile)
+                }
+
+                while inputFile.framePosition < frameLength {
+                    try inputFile.read(into: buffer)
+                    guard let floatData = buffer.floatChannelData else { continue }
+                    
+                    for channel in 0..<Int(channelCount) {
+                        var channelSumOfSquares: Float = 0
+                        vDSP_svesq(floatData[channel], 1, &channelSumOfSquares, vDSP_Length(buffer.frameLength))
+                        sumOfSquares += Double(channelSumOfSquares)
+                    }
+                }
+                
+                let totalSamples = Double(frameLength) * Double(channelCount)
+                let meanSquare = sumOfSquares / totalSamples
+                let rootMeanSquare = sqrt(meanSquare)
+                
+                // --- Calculate Gain ---
+                let targetRMSDecibels: Float = -20.0
+                let targetRMS = pow(10.0, targetRMSDecibels / 20.0)
+                var gain = targetRMS / Float(rootMeanSquare)
+                gain = min(gain, 1000.0) // Clamp gain to avoid excessive amplification
+
+                // --- Pass 2: Apply gain and write to new file ---
+                let outputSettings = inputFile.processingFormat.settings
+                let outputFile = try AVAudioFile(forWriting: tempURL, settings: outputSettings)
+                
+                inputFile.framePosition = 0
+                
+                while inputFile.framePosition < frameLength {
+                    try inputFile.read(into: buffer)
+                    
+                    guard let processedBuffer = self.audioProcessor.applyGain(buffer: buffer, gain: gain) else {
+                        throw URLError(.cannotCreateFile)
+                    }
+                    try outputFile.write(from: processedBuffer)
+                }
+                
+                // --- Load the new normalized file ---
                 await MainActor.run {
-                    self.errorMessage = "正規化処理に失敗しました。"
+                    self.handleFile(at: tempURL)
+                }
+
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "正規化処理に失敗しました: \(error.localizedDescription)"
                     self.isLoading = false
                     self.isAnalyzing = false
                 }
-                return
-            }
-
-            // AudioDataを更新
-            let newData = AudioData(
-                url: data.url,
-                pcmBuffer: normalizedBuffer
-            )
-
-            await MainActor.run {
-                self.audioData = newData
-            }
-
-            // 再解析
-            let analyzer = waveformAnalyzer
-            let (samples, features, segments) = await Task.detached(priority: .userInitiated) {
-                let samples = analyzer.generateWaveformSamples(from: normalizedBuffer, targetSampleCount: 1000)
-                let features = analyzer.extractFeatures(from: normalizedBuffer)
-                let segments = analyzer.calculateSegments(from: features)
-                return (samples, features, segments)
-            }.value
-
-            await MainActor.run {
-                self.waveformSamples = samples
-                self.audioFeatures = features
-                self.segments = segments
-                self.isLoading = false
-                self.isAnalyzing = false
-                print("MainViewModel: Normalization and Re-analysis complete.")
             }
         }
     }

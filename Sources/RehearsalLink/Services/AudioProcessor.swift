@@ -61,7 +61,7 @@ struct AudioProcessor: Sendable {
         return applyGain(buffer: buffer, gain: gain)
     }
 
-    private func applyGain(buffer: AVAudioPCMBuffer, gain: Float) -> AVAudioPCMBuffer? {
+    func applyGain(buffer: AVAudioPCMBuffer, gain: Float) -> AVAudioPCMBuffer? {
         guard let floatData = buffer.floatChannelData,
               let outputBuffer = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
             return nil
