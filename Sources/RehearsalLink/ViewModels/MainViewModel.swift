@@ -52,8 +52,7 @@ class MainViewModel: ObservableObject {
         // ループ設定の同期
         $isLoopingEnabled
             .receive(on: RunLoop.main)
-            .sink { [weak self] enabled in
-                self?.audioPlayerService.isLooping = enabled
+            .sink { [weak self] _ in
                 self?.updateLoopRange()
             }
             .store(in: &cancellables)
@@ -82,12 +81,13 @@ class MainViewModel: ObservableObject {
     }
 
     private func updateLoopRange() {
-        if isLoopingEnabled, let selectedId = selectedSegmentId,
+        if let selectedId = selectedSegmentId,
            let segment = segments.first(where: { $0.id == selectedId }) {
             audioPlayerService.loopRange = segment.startTime ... segment.endTime
         } else {
             audioPlayerService.loopRange = nil
         }
+        audioPlayerService.isLooping = isLoopingEnabled
     }
 
     func selectFile() {

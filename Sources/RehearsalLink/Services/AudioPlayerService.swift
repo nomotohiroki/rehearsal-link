@@ -42,13 +42,15 @@ class AudioPlayerService: ObservableObject {
         }
     }
 
-    private func scheduleSegment(from time: TimeInterval, to endTime: TimeInterval? = nil) {
+    private func scheduleSegment(from time: TimeInterval) {
         guard let file = audioFile else { return }
 
         playerNode.stop()
 
         let sampleRate = file.processingFormat.sampleRate
-        let end = endTime ?? fileDuration
+        
+        // ループ中ならループ範囲の終端、そうでなければファイル末尾まで
+        let end = (isLooping ? loopRange?.upperBound : nil) ?? fileDuration
         
         let startFrame = max(0, AVAudioFramePosition(time * sampleRate))
         let endFrame = min(AVAudioFramePosition(end * sampleRate), file.length)
@@ -60,13 +62,10 @@ class AudioPlayerService: ObservableObject {
 
         // Schedule the specific segment
         playerNode.scheduleSegment(file, startingFrame: startFrame, frameCount: AVAudioFrameCount(frameCount), at: nil) { [weak self] in
-            // This closure is called when the segment finishes playing.
+            // 完了時の処理はシンプルに：ループ中ならタイマーがseekをハンドルするので、ここでは何もしない。
+            // ループ中でない場合のみ、再生終了処理を行う。
             DispatchQueue.main.async {
-                if self?.isLooping == true, let range = self?.loopRange {
-                    self?.seek(to: range.lowerBound)
-                    // After seeking, we need to play again
-                    self?.play()
-                } else {
+                if self?.isLooping == false {
                     self?.isPlaying = false
                     self?.stopTimer()
                 }
@@ -87,6 +86,13 @@ class AudioPlayerService: ObservableObject {
             }
         }
 
+        // ループ範囲が設定されている場合、現在位置が範囲外なら開始位置に戻す
+        if isLooping, let range = loopRange {
+            if currentTime < range.lowerBound || currentTime >= range.upperBound - 0.05 {
+                currentTime = range.lowerBound
+            }
+        }
+
         // Resume from current time
         scheduleSegment(from: currentTime)
         playerNode.play()
@@ -95,21 +101,23 @@ class AudioPlayerService: ObservableObject {
     }
 
     func pause() {
-        guard isPlaying else { return }
         playerNode.pause()
         isPlaying = false
         stopTimer()
     }
 
     func stop() {
-        if isPlaying {
-            playerNode.stop()
-        }
+        playerNode.stop()
         isPlaying = false
         stopTimer()
-        // Resetting time on stop might be desired behavior in some cases, here we keep it.
-        // currentTime = 0
-        // segmentStartTime = 0
+        
+        // 停止時は位置をリセット（ループ範囲があればその開始位置、なければ0）
+        if let range = loopRange {
+            currentTime = range.lowerBound
+        } else {
+            currentTime = 0
+        }
+        segmentStartTime = currentTime
     }
 
     func seek(to time: TimeInterval) {
@@ -122,7 +130,7 @@ class AudioPlayerService: ObservableObject {
             scheduleSegment(from: newTime)
             playerNode.play()
         } else {
-            // If paused, just update the schedule for the next play
+            // 停止中/ポーズ中のシークでもスケジュールを更新しておく
             scheduleSegment(from: newTime)
         }
     }
@@ -151,7 +159,21 @@ class AudioPlayerService: ObservableObject {
 
         let newCurrentTime = segmentStartTime + (Double(playerTime.sampleTime) / playerTime.sampleRate)
         if newCurrentTime.isFinite && newCurrentTime >= 0 {
-            currentTime = min(newCurrentTime, fileDuration)
+            // ループ処理
+            if isLooping, let range = loopRange {
+                if newCurrentTime >= range.upperBound {
+                    seek(to: range.lowerBound)
+                    return
+                }
+            }
+            
+            // ファイル末尾に到達
+            if newCurrentTime >= fileDuration {
+                stop()
+                return
+            }
+
+            currentTime = newCurrentTime
         }
     }
 }
