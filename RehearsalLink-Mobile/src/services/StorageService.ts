@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { RehearsalLinkProject } from '../models/RehearsalLinkProject';
 import { v4 as uuidv4 } from 'uuid';
 

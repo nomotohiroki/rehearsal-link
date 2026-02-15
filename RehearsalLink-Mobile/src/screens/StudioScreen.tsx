@@ -8,7 +8,7 @@ import { RehearsalLinkProject } from '../models/RehearsalLinkProject';
 import { AudioSegment, SegmentType } from '../models/AudioSegment';
 import { audioService, AudioStatus } from '../services/AudioService';
 import { createProject, saveProject, getAudioUri } from '../services/StorageService';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 type StudioScreenProps = NativeStackScreenProps<RootStackParamList, 'Studio'>;
 
