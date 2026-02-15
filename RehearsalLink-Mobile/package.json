@@ -31,5 +31,9 @@
     "@types/uuid": "^10.0.0",
     "typescript": "~5.9.2"
   },
+  "overrides": {
+    "hermes-parser": "0.32.0",
+    "hermes-estree": "0.32.0"
+  },
   "private": true
 }
